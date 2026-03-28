@@ -39,6 +39,7 @@ export default function Dashboard() {
   const [state, setState] = useState<NotusState>(INITIAL_STATE);
   const [currentZip, setCurrentZip] = useState('');
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [mobileView, setMobileView] = useState<'sidebar' | 'map'>('sidebar');
   const mountedRef = useRef(true);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -249,15 +250,41 @@ export default function Dashboard() {
   const planReady = state.agents.dispatch.status === 'done' && state.actionPlan !== null;
 
   return (
-    <div className="flex h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
-      <Sidebar
-        agents={state.agents}
-        feedItems={state.feedItems}
-        onDeploy={handleDeploy}
-        onFollowUp={handleFollowUp}
-        showFollowUp={planReady && !!sessionId}
-      />
-      <main className="flex-1 flex flex-col relative min-h-screen">
+    <div className="flex flex-col md:flex-row h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
+      <div className="md:hidden flex border-b border-white/5 bg-black">
+        <button
+          onClick={() => setMobileView('sidebar')}
+          className={`flex-1 py-2.5 text-[11px] font-bold tracking-wider transition-colors ${
+            mobileView === 'sidebar'
+              ? 'text-[#ff6b35] border-b-2 border-[#ff6b35]'
+              : 'text-[#475569]'
+          }`}
+        >
+          AGENTS
+        </button>
+        <button
+          onClick={() => setMobileView('map')}
+          className={`flex-1 py-2.5 text-[11px] font-bold tracking-wider transition-colors ${
+            mobileView === 'map'
+              ? 'text-[#ff6b35] border-b-2 border-[#ff6b35]'
+              : 'text-[#475569]'
+          }`}
+        >
+          MAP
+        </button>
+      </div>
+
+      <div className={`${mobileView === 'sidebar' ? 'flex' : 'hidden'} md:flex`}>
+        <Sidebar
+          agents={state.agents}
+          feedItems={state.feedItems}
+          onDeploy={handleDeploy}
+          onFollowUp={handleFollowUp}
+          showFollowUp={planReady && !!sessionId}
+        />
+      </div>
+
+      <main className={`flex-1 flex flex-col relative min-h-0 ${mobileView === 'map' ? 'flex' : 'hidden'} md:flex`}>
         <MapView
           agentsActive={agentsActive}
           pins={state.mapPins}

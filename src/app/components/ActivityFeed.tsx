@@ -16,29 +16,34 @@ export default function ActivityFeed({ items }: ActivityFeedProps) {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      {items.map((item, i) => (
-        <div
-          key={i}
-          className="mb-2 pl-2.5 py-1.5 rounded-r-md animate-slide-in"
-          style={{
-            borderLeft: `2px solid ${item.color}`,
-            background: i === items.length - 1 ? `${item.color}08` : 'transparent',
-          }}
-        >
-          <div className="flex items-center gap-1.5 mb-0.5">
-            <span
-              className="font-semibold text-[10px] capitalize"
-              style={{ color: item.color }}
-            >
-              {item.agent}
-            </span>
-            <span className="text-[9px] text-[#334155]">{item.time}</span>
+      {items.map((item, i) => {
+        const bgAvatar = item.color || '#00ff00';
+        return (
+          <div key={i} className="flex gap-3 mb-5 pl-1">
+            <div className="mt-0.5 shrink-0">
+              <div 
+                className="w-6 h-6 rounded-full overflow-hidden shadow-lg"
+                style={{ backgroundColor: bgAvatar, boxShadow: `0 0 8px ${bgAvatar}40` }}
+              >
+                <svg viewBox="0 0 8 8" className="w-full h-full opacity-80">
+                  <rect width="8" height="8" fill={bgAvatar} />
+                  <rect x="1" y="2" width="2" height="1" fill="#fff" />
+                  <rect x="5" y="2" width="2" height="1" fill="#fff" />
+                  <rect x="2" y="5" width="4" height="2" fill="#000" opacity="0.3" />
+                </svg>
+              </div>
+            </div>
+            <div className="flex flex-col flex-1">
+              <div className="font-bold text-[14px] text-white capitalize mb-1.5 tracking-wide">
+                {item.agent}
+              </div>
+              <div className="bg-[#1f1f1f] text-[#e5e5e5] rounded-[14px] px-3.5 py-3 text-[13px] leading-[1.6] shadow-sm">
+                {item.message}
+              </div>
+            </div>
           </div>
-          <div className="text-[11px] text-[#94a3b8] font-mono leading-snug">
-            {item.message}
-          </div>
-        </div>
-      ))}
+        );
+      })}
       <div ref={bottomRef} />
     </div>
   );

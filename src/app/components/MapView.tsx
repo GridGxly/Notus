@@ -11,19 +11,6 @@ interface MapViewProps {
   mapView?: { lat: number; lng: number; zoom?: number };
 }
 
-const mapStyles = [
-  { elementType: 'geometry', stylers: [{ color: '#0d1117' }] },
-  { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#475569' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#0d1117' }] },
-  { featureType: 'administrative', elementType: 'geometry', stylers: [{ color: '#1e293b' }] },
-  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#14141f' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#1a1a2e' }] },
-  { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#1e293b' }] },
-  { featureType: 'transit', elementType: 'geometry', stylers: [{ color: '#14141f' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0a0a0f' }] },
-];
-
 function StormTrackPolyline({ path }: { path: { lat: number; lng: number }[] }) {
   const map = useMap();
 
@@ -74,7 +61,11 @@ function MapController({
 
     map.panTo({ lat: mapView.lat, lng: mapView.lng });
     if (mapView.zoom) {
-      map.setZoom(mapView.zoom);
+      const currentZoom = map.getZoom() || 12;
+      const targetZoom = mapView.zoom;
+      if (Math.abs(currentZoom - targetZoom) > 0.5) {
+        map.setZoom(targetZoom);
+      }
     }
   }, [map, mapView]);
 
@@ -141,11 +132,21 @@ export default function MapView({
   mapView,
 }: MapViewProps) {
   const center = { lat: 27.9506, lng: -82.4572 };
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || 'AIzaSyFakePlaceholderForUI';
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '';
   const [selectedPin, setSelectedPin] = useState<MapPin | null>(null);
 
   return (
-    <div className="flex-1 min-h-0 relative bg-[var(--bg-card)] overflow-hidden">
+    <div className="flex-1 min-h-0 relative bg-[#06070a] overflow-hidden group">
+      {agentsActive && (
+        <div className="absolute inset-0 pointer-events-none z-30">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(0,0,0,0.4)_100%)]"></div>
+          <div className="absolute bottom-5 right-5 text-[8px] font-mono text-white/30 tracking-widest text-right">
+            <div>GEO: {mapView?.lat?.toFixed(5) || center.lat.toFixed(5)}</div>
+            <div>LNG: {mapView?.lng?.toFixed(5) || center.lng.toFixed(5)}</div>
+          </div>
+        </div>
+      )}
+
       {!agentsActive && (
         <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-[#0a0a0f]/60 backdrop-blur-md transition-opacity duration-300">
           <svg className="w-8 h-8 mb-3 stroke-[#1e293b] fill-none" viewBox="0 0 24 24" strokeWidth="1.5">
@@ -162,7 +163,6 @@ export default function MapView({
           defaultZoom={12}
           disableDefaultUI={true}
           mapId="DEMO_MAP_ID"
-          styles={mapStyles}
           style={{ width: '100%', height: '100%' }}
           onClick={() => setSelectedPin(null)}
         >
@@ -174,7 +174,7 @@ export default function MapView({
                   position={{ lat: pin.lat, lng: pin.lng }}
                   onClick={() => setSelectedPin(pin)}
                 >
-                  <div className="w-3.5 h-3.5 rounded-full bg-[#f59e0b] border-[1.5px] border-[#0d1117] shadow-[0_0_8px_rgba(245,158,11,0.6)] cursor-pointer hover:scale-125 transition-transform" />
+                  <div className="w-3.5 h-3.5 rounded-full bg-[#f59e0b] border-[1.5px] border-[#0d1117] shadow-[0_0_8px_rgba(245,158,11,0.6)] cursor-pointer hover:scale-125 transition-transform animate-pin-drop" />
                 </AdvancedMarker>
               );
             }
@@ -185,7 +185,7 @@ export default function MapView({
                   position={{ lat: pin.lat, lng: pin.lng }}
                   onClick={() => setSelectedPin(pin)}
                 >
-                  <div className="w-3.5 h-3.5 bg-[#8b5cf6] border-[1.5px] border-[#0d1117] shadow-[0_0_8px_rgba(139,92,246,0.6)] cursor-pointer hover:scale-125 transition-transform" />
+                  <div className="w-3.5 h-3.5 bg-[#8b5cf6] border-[1.5px] border-[#0d1117] shadow-[0_0_8px_rgba(139,92,246,0.6)] cursor-pointer hover:scale-125 transition-transform animate-pin-drop" />
                 </AdvancedMarker>
               );
             }

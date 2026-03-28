@@ -4,20 +4,23 @@ import type { MapPin, ActionPlan, StreamChunk, AgentName } from '../../lib/types
 
 export const dynamic = 'force-dynamic';
 
-const ZIP_COORDS: Record<string, { lat: number; lng: number; state: string }> = {
-  '33620': { lat: 28.0587, lng: -82.4139, state: 'FL' },
-  '33601': { lat: 27.9506, lng: -82.4572, state: 'FL' },
-  '33602': { lat: 27.9478, lng: -82.4584, state: 'FL' },
-  '33606': { lat: 27.9253, lng: -82.4906, state: 'FL' },
-  '33609': { lat: 27.9345, lng: -82.5217, state: 'FL' },
-  '33647': { lat: 28.1006, lng: -82.3538, state: 'FL' },
-  '33701': { lat: 27.7731, lng: -82.6393, state: 'FL' },
-  '33756': { lat: 27.9659, lng: -82.7874, state: 'FL' },
-  '33401': { lat: 26.7153, lng: -80.0534, state: 'FL' },
-  '33101': { lat: 25.7617, lng: -80.1918, state: 'FL' },
-  '32801': { lat: 28.5383, lng: -81.3792, state: 'FL' },
-  '32303': { lat: 30.4551, lng: -84.2534, state: 'FL' },
-};
+async function geocodeZip(zip: string): Promise<{ lat: number; lng: number; state: string }> {
+  try {
+    const res = await fetch(`https://api.zippopotam.us/us/${encodeURIComponent(zip)}`);
+    if (!res.ok) return DEFAULT_COORDS;
+    const data = await res.json();
+    const place = data.places?.[0];
+    if (!place) return DEFAULT_COORDS;
+    
+    return {
+      lat: parseFloat(place.latitude),
+      lng: parseFloat(place.longitude),
+      state: place['state abbreviation'] || 'FL'
+    };
+  } catch {
+    return DEFAULT_COORDS;
+  }
+}
 
 const DEFAULT_COORDS = { lat: 27.9506, lng: -82.4572, state: 'FL' };
 
@@ -49,48 +52,57 @@ function buildFallbackPlan(
 ): ActionPlan {
   const levelMatch =
     finalText.match(/threat\s*level[:\s]*(\d)\s*(?:[/(]|of\s)/i) ||
-    finalText.match(/level[:\s]*(\d)\s*\(/i);
-  const level = levelMatch ? `${levelMatch[1]}/5` : 'Low';
+    finalText.match(/level[:\s]*(\d)\s*\(/i) ||
+    finalText.match(/(\d)\s*(?:out\s+of|\/)\s*5/i);
+  const level = levelMatch ? `${levelMatch[1]}/5` : '1/5';
 
   let detail = '';
-  const patterns = [
-    /(?:wind[s]?\s+(?:are\s+)?(?:expected\s+)?(?:at\s+)?[\d]+\s*mph[^.]*\.)/i,
-    /(?:tropical\s+storm[^.]*\.)/i,
-    /(?:no\s+active\s+hurricane[^.]*\.)/i,
-    /(?:the\s+area\s+is\s+currently[^.]*\.)/i,
-    /(?:conditions[^.]*\.)/i,
-  ];
-  for (const p of patterns) {
-    const m = finalText.match(p);
-    if (m) {
-      detail = m[0];
+  const cleaned = finalText
+    .replace(/```[\s\S]*?```/g, '')
+    .replace(/\{[\s\S]*?\}/g, '')
+    .trim();
+  const sentences = cleaned.match(/[A-Z][^.!?]*[.!?]/g) || [];
+  for (const s of sentences) {
+    if (s.length > 20 && s.length < 200 && !s.includes('{') && !s.includes('JSON')) {
+      detail = s.trim();
       break;
     }
   }
   if (!detail) {
-    detail = finalText
-      .replace(/```[\s\S]*?```/g, '')
-      .replace(/\{[\s\S]*?\}/g, '')
-      .trim()
-      .slice(0, 150);
+    detail = 'No active hurricane or tropical storm threats detected for this area.';
+  }
+
+  const fuelName = supplyPins[0]?.label || 'No nearby stations found';
+  const shelterName = shelterPins[0]?.label || 'No nearby shelters found';
+
+  const hasFuel = supplyPins.length > 0;
+  const hasShelter = shelterPins.length > 0;
+  let primary = 'Stay weather-aware and keep emergency supplies ready';
+  let secondary = 'Sign up for local county emergency alerts';
+  if (hasFuel && hasShelter) {
+    primary = `Fuel up at ${fuelName} and note ${shelterName} as your go-to shelter`;
+    secondary = 'Keep a 72-hour emergency kit packed and monitor local forecasts';
+  } else if (hasFuel) {
+    primary = `Top off fuel at ${fuelName} while conditions are clear`;
+    secondary = 'Identify your nearest community shelter as a precaution';
+  } else if (hasShelter) {
+    primary = `Know your shelter route to ${shelterName}`;
+    secondary = 'Keep your vehicle fueled above half-tank as a precaution';
   }
 
   return {
-    threat: { level, detail: detail || 'Assessment complete' },
+    threat: { level, detail },
     fuel: {
-      name: supplyPins[0]?.label || 'Check local stations',
+      name: fuelName,
       distance: '--',
-      status: supplyPins.length > 0 ? 'LOCATED' : 'CHECK LOCALLY',
+      status: hasFuel ? 'OPEN' : 'SEARCHING',
     },
     shelter: {
-      name: shelterPins[0]?.label || 'Check local shelters',
+      name: shelterName,
       distance: '--',
-      status: shelterPins.length > 0 ? 'LOCATED' : 'CHECK LOCALLY',
+      status: hasShelter ? 'AVAILABLE' : 'SEARCHING',
     },
-    directive: {
-      primary: 'Monitor local emergency management',
-      secondary: 'Prepare 72-hour emergency supplies',
-    },
+    directive: { primary, secondary },
   };
 }
 
@@ -121,8 +133,12 @@ function createStream() {
 
   const finish = async () => {
     await writeQueue;
-    await writer.write(encoder.encode('data: [DONE]\n\n'));
-    await writer.close();
+    try {
+      await writer.write(encoder.encode('data: [DONE]\n\n'));
+    } catch {}
+    try {
+      await writer.close();
+    } catch {}
   };
 
   return { readable, send, finish, writeQueue };
@@ -196,7 +212,7 @@ function extractPins(
 }
 
 async function handleInitial(zip: string) {
-  const coords = ZIP_COORDS[zip] || DEFAULT_COORDS;
+  const coords = await geocodeZip(zip);
   const { lat, lng, state: stateCode } = coords;
   const { readable, send, finish } = createStream();
 
@@ -206,14 +222,12 @@ async function handleInitial(zip: string) {
         agent: 'dispatch',
         status: 'active',
         thinkingMessage: 'Deploying agents',
-        feed: `On it — checking conditions near ${zip}.`,
         mapView: { lat, lng, zoom: 11 },
       });
       await send({
         agent: 'recon',
         status: 'active',
         thinkingMessage: 'Checking for storm warnings',
-        feed: 'Let me check the latest weather alerts for your area.',
       });
 
       const runner = new InMemoryRunner({ agent: rootAgent, appName: 'notus' });
@@ -249,30 +263,48 @@ async function handleInitial(zip: string) {
       const shelterPins: MapPin[] = [];
 
       const reconMsgs = [
-        'Checking for storm warnings',
-        'Looking at current weather',
-        'Checking wind speeds',
-        'Figuring out how serious this is',
-        'Scanning for advisories',
-        'Reading the latest forecast',
+        'Pulling NWS satellite feeds',
+        'Analyzing wind corridors',
+        'Reading storm surge models',
+        'Cross-referencing forecast data',
+        'Checking coastal flood zones',
+        'Mapping precipitation bands',
+        'Evaluating historical patterns',
+        'Assessing 24hr trajectory',
       ];
       const supplyMsgs = [
-        'Finding open gas stations',
-        'Checking if they have fuel',
-        'Looking for the closest ones',
+        'Scanning fuel grid for open stations',
+        'Checking highway access routes',
+        'Evaluating flood-safe corridors',
+        'Verifying station capacity',
+        'Mapping backup supply points',
       ];
       const shelterMsgs = [
-        'Finding safe places to go',
-        'Checking if they have room',
-        'Making sure you can get there',
+        'Surveying concrete structures nearby',
+        'Checking building wind ratings',
+        'Evaluating shelter accessibility',
+        'Cross-referencing with supply routes',
+        'Verifying capacity and status',
       ];
       let beatIdx = 0;
 
       const heartbeat = (async () => {
+        const start = Date.now();
         while (!adkDone) {
           for (let i = 0; i < 18 && !adkDone; i++) await wait(100);
           if (adkDone) break;
           beatIdx++;
+          
+          const elapsed = (Date.now() - start) / 1000;
+          const offsetLat = lat + Math.sin(elapsed * 0.35) * 0.08 + Math.sin(elapsed * 0.7) * 0.02;
+          const offsetLng = lng + Math.cos(elapsed * 0.25) * 0.08 + Math.cos(elapsed * 0.55) * 0.03;
+          const zoomDrift = 11.5 + Math.sin(elapsed * 0.18) * 1.0;
+          
+          await send({
+            agent: 'dispatch',
+            mapView: { lat: offsetLat, lng: offsetLng, zoom: Math.round(zoomDrift * 10) / 10 },
+          });
+
           if (!reconDone) {
             await send({
               agent: 'recon',
@@ -305,8 +337,8 @@ async function handleInitial(zip: string) {
         const content = stringifyContent(event);
 
         if (agentName === 'recon') {
-          if (content && content.length > 15 && !looksLikeJson(content)) {
-            await send({ agent: 'recon', feed: content.slice(0, 250) });
+          if (content && content.length > 5 && !looksLikeJson(content)) {
+            await send({ agent: 'recon', feed: content.trim() });
           }
         }
 
@@ -325,13 +357,11 @@ async function handleInitial(zip: string) {
               agent: 'supply',
               status: 'active',
               thinkingMessage: 'Finding open gas stations',
-              feed: 'Looking for gas stations that are still open near you.',
               mapView: { lat, lng, zoom: 13 },
             });
-          } else {
-            if (content && content.length > 15 && !looksLikeJson(content)) {
-              await send({ agent: 'supply', feed: content.slice(0, 250) });
-            }
+          }
+          if (content && content.length > 5 && !looksLikeJson(content)) {
+            await send({ agent: 'supply', feed: content.trim() });
           }
         }
 
@@ -346,12 +376,10 @@ async function handleInitial(zip: string) {
               agent: 'shelter',
               status: 'active',
               thinkingMessage: 'Finding safe places nearby',
-              feed: 'Finding shelters and safe places nearby.',
             });
-          } else {
-            if (content && content.length > 15 && !looksLikeJson(content)) {
-              await send({ agent: 'shelter', feed: content.slice(0, 250) });
-            }
+          }
+          if (content && content.length > 5 && !looksLikeJson(content)) {
+            await send({ agent: 'shelter', feed: content.trim() });
           }
         }
 
@@ -375,37 +403,39 @@ async function handleInitial(zip: string) {
       await send({
         agent: 'supply',
         status: 'done',
-        feed: supplyStarted
-          ? supplyPins.length > 0
-            ? `Found ${supplyPins.length} gas station${supplyPins.length > 1 ? 's' : ''} near you.`
-            : 'No fuel data available right now.'
-          : undefined,
       });
       await wait(300);
 
       await send({
         agent: 'shelter',
         status: 'done',
-        feed: shelterStarted
-          ? shelterPins.length > 0
-            ? `Found ${shelterPins.length} shelter${shelterPins.length > 1 ? 's' : ''} you could go to.`
-            : 'No shelter data available right now.'
-          : undefined,
       });
       await wait(300);
 
       await send({
         agent: 'dispatch',
-        thinkingMessage: 'Putting your plan together',
+        thinkingMessage: 'Synthesizing team intel',
+      });
+      await wait(600);
+
+      await send({
+        agent: 'dispatch',
+        thinkingMessage: 'Compiling action plan',
       });
       await wait(400);
 
       await send({
         agent: 'dispatch',
         pin: { lat, lng, type: 'user', label: 'You' },
-        mapView: { lat, lng, zoom: 12 },
+        mapView: { lat, lng, zoom: 13 },
       });
-      await wait(200);
+      await wait(600);
+
+      await send({
+        agent: 'dispatch',
+        mapView: { lat, lng, zoom: 14 },
+      });
+      await wait(300);
 
       let actionPlan: ActionPlan;
       let parsed: Record<string, unknown> | null = null;
@@ -473,7 +503,7 @@ async function handleInitial(zip: string) {
       await send({
         agent: 'dispatch',
         status: 'done',
-        feed: 'Your plan is ready. Stay safe out there.',
+        thinkingMessage: undefined,
         actionPlan,
       });
 
@@ -557,21 +587,21 @@ async function handleFollowUp(storedSessionId: string, question: string) {
               agent: 'recon',
               status: 'active',
               thinkingMessage: 'Checking again',
-              feed: content.slice(0, 250),
+              feed: content.trim(),
             });
           } else if (agentName === 'supply') {
             await send({
               agent: 'supply',
               status: 'active',
               thinkingMessage: 'Searching',
-              feed: content.slice(0, 250),
+              feed: content.trim(),
             });
           } else if (agentName === 'shelter') {
             await send({
               agent: 'shelter',
               status: 'active',
               thinkingMessage: 'Looking',
-              feed: content.slice(0, 250),
+              feed: content.trim(),
             });
           }
         }
@@ -590,11 +620,18 @@ async function handleFollowUp(storedSessionId: string, question: string) {
 
       let answer = finalText;
       if (looksLikeJson(answer)) {
-        const cleaned = answer
-          .replace(/```[\s\S]*?```/g, '')
-          .replace(/\{[\s\S]*?\}/g, '')
-          .trim();
-        if (cleaned.length > 20) answer = cleaned;
+        try {
+          const parsed = JSON.parse(answer.replace(/```(?:json)?\s*([\s\S]*?)```/, '$1'));
+          if (parsed.directive?.primary) {
+            answer = `${parsed.directive.primary} ${parsed.directive.secondary || ''}. ${parsed.threat?.detail || ''}`;
+          }
+        } catch {
+          const cleaned = answer
+            .replace(/```[\s\S]*?```/g, '')
+            .replace(/\{[\s\S]*?\}/g, '')
+            .trim();
+          if (cleaned.length > 20) answer = cleaned;
+        }
       }
 
       await send({

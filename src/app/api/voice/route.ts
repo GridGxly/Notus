@@ -9,12 +9,15 @@ export async function POST(request: Request) {
   };
 
   const briefing =
-    `NOTUS Briefing for zip code ${zip}. ` +
-    `Threat level: ${actionPlan.threat.level}. ${actionPlan.threat.detail}. ` +
-    `Your nearest fuel is ${actionPlan.fuel.name}, ${actionPlan.fuel.distance} away, currently ${actionPlan.fuel.status}. ` +
-    `Your recommended shelter is ${actionPlan.shelter.name}, ${actionPlan.shelter.distance} away, ${actionPlan.shelter.status}. ` +
-    `Directive: ${actionPlan.directive.primary}. ${actionPlan.directive.secondary}. ` +
-    `Stay safe.`;
+    `Hey, this is your Notus briefing for the area around zip code ${zip}. ` +
+    `Here's what the team just put together for you. ` +
+    `We're looking at a threat level of ${actionPlan.threat.level} right now. ` +
+    `${actionPlan.threat.detail} ` +
+    `For fuel, your best option is ${actionPlan.fuel.name}${actionPlan.fuel.distance !== '--' ? `, about ${actionPlan.fuel.distance} away` : ''}. ` +
+    `If you need shelter, head to ${actionPlan.shelter.name}${actionPlan.shelter.distance !== '--' ? `, roughly ${actionPlan.shelter.distance} from your location` : ''}. ` +
+    `The team's recommendation? ${actionPlan.directive.primary}. ` +
+    `And as a backup plan, ${actionPlan.directive.secondary}. ` +
+    `Stay safe out there. Notus is watching.`;
 
   const apiKey = process.env.ELEVENLABS_API_KEY;
   if (!apiKey) {
@@ -22,7 +25,7 @@ export async function POST(request: Request) {
   }
 
   const ttsRes = await fetch(
-    'https://api.elevenlabs.io/v1/text-to-speech/pNInz6obpgDQGcFmaJgB',
+    'https://api.elevenlabs.io/v1/text-to-speech/ErXwobaYiN019PkySvjV',
     {
       method: 'POST',
       headers: {
@@ -31,7 +34,13 @@ export async function POST(request: Request) {
       },
       body: JSON.stringify({
         text: briefing,
-        model_id: 'eleven_flash_v2_5',
+        model_id: 'eleven_multilingual_v2',
+        voice_settings: {
+          stability: 0.25,
+          similarity_boost: 0.85,
+          style: 1.0,
+          use_speaker_boost: true
+        }
       }),
     },
   );
