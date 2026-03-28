@@ -1,8 +1,17 @@
+'use client';
+
 import Image from 'next/image';
 import { useState } from 'react';
 import AgentRow from './AgentRow';
 import ActivityFeed from './ActivityFeed';
-import type { NotusState } from '../lib/types';
+import type { AgentName, NotusState } from '../lib/types';
+
+const agentColors: Record<AgentName, string> = {
+  recon: '#3b82f6',
+  supply: '#f59e0b',
+  shelter: '#8b5cf6',
+  dispatch: '#ff6b35',
+};
 
 interface SidebarProps {
   agents: NotusState['agents'];
@@ -14,10 +23,12 @@ export default function Sidebar({ agents, feedItems, onDeploy }: SidebarProps) {
   const [zipCode, setZipCode] = useState('');
 
   const handleGo = () => {
-    if (zipCode.trim()) {
-      onDeploy(zipCode.trim());
-    }
+    if (zipCode.trim()) onDeploy(zipCode.trim());
   };
+
+  const activeAgents = (Object.keys(agents) as AgentName[]).filter(
+    name => agents[name].status === 'active'
+  );
 
   return (
     <aside className="w-[280px] min-w-[280px] bg-[#0f0f17] border-r border-[#1a1a2e] flex flex-col h-full">
@@ -48,7 +59,7 @@ export default function Sidebar({ agents, feedItems, onDeploy }: SidebarProps) {
             onKeyDown={(e) => e.key === 'Enter' && handleGo()}
             className="flex-1 bg-[#14141f] border border-[#1e293b] text-[#e2e8f0] px-2.5 py-2 rounded-md text-[13px] outline-none placeholder:text-[#334155]"
           />
-          <button 
+          <button
             onClick={handleGo}
             className="bg-[#ff6b35] text-[#0a0a0f] px-3.5 py-2 rounded-md font-bold text-[12px] whitespace-nowrap transition-transform active:scale-95"
           >
@@ -58,19 +69,38 @@ export default function Sidebar({ agents, feedItems, onDeploy }: SidebarProps) {
       </div>
 
       <div className="px-4 py-3 border-b border-[#1a1a2e]">
-        <div className="text-[9px] text-[#475569] tracking-[1.2px] font-semibold mb-2">
-          AGENTS
-        </div>
-        <AgentRow name="recon" status={agents.recon.status} />
-        <AgentRow name="supply" status={agents.supply.status} />
-        <AgentRow name="shelter" status={agents.shelter.status} />
-        <AgentRow name="dispatch" status={agents.dispatch.status} />
+        <div className="text-[9px] text-[#475569] tracking-[1.2px] font-semibold mb-2">AGENTS</div>
+        <AgentRow name="recon" status={agents.recon.status} thinkingMessage={agents.recon.thinkingMessage} />
+        <AgentRow name="supply" status={agents.supply.status} thinkingMessage={agents.supply.thinkingMessage} />
+        <AgentRow name="shelter" status={agents.shelter.status} thinkingMessage={agents.shelter.thinkingMessage} />
+        <AgentRow name="dispatch" status={agents.dispatch.status} thinkingMessage={agents.dispatch.thinkingMessage} />
       </div>
 
       <div className="flex flex-col flex-1 px-4 py-3 overflow-hidden">
-        <div className="text-[9px] text-[#475569] tracking-[1.2px] font-semibold mb-2">
-          ACTIVITY
-        </div>
+        <div className="text-[9px] text-[#475569] tracking-[1.2px] font-semibold mb-2">ACTIVITY</div>
+
+        {activeAgents.length > 0 && (
+          <div className="mb-2 px-3 py-2 rounded-lg bg-[#14141f] border border-[#1a1a2e]">
+            <div className="flex items-center gap-2">
+              <div className="flex -space-x-1">
+                {activeAgents.map(name => (
+                  <div
+                    key={name}
+                    className="w-4 h-4 rounded-full border border-[#0f0f17] animate-pulse"
+                    style={{ backgroundColor: agentColors[name] }}
+                  />
+                ))}
+              </div>
+              <span className="text-[11px] text-[#94a3b8]">
+                {activeAgents.length === 1
+                  ? `${activeAgents[0]} is working on it`
+                  : 'Agents thinking'}
+                <span className="animate-dots" />
+              </span>
+            </div>
+          </div>
+        )}
+
         <ActivityFeed items={feedItems} />
       </div>
     </aside>

@@ -71,7 +71,7 @@ export default function MapView({ agentsActive = false, pins = [], stormTrack = 
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
             <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
           </svg>
-          <div className="text-[12px] text-[#e2e8f0] font-medium tracking-wide">Enter a zip code and deploy</div>
+          <div className="text-[12px] text-[#e2e8f0] font-medium tracking-wide">Enter your zip code to get started</div>
         </div>
       )}
 

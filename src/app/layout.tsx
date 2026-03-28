@@ -24,7 +24,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="h-full">
-      <body className={`${dmSans.variable} ${jetbrainsMono.variable} font-sans antialiased h-full`}>
+      <body suppressHydrationWarning className={`${dmSans.variable} ${jetbrainsMono.variable} font-sans antialiased h-full`}>
         {children}
       </body>
     </html>

@@ -1,6 +1,12 @@
 export type AgentName = 'recon' | 'supply' | 'shelter' | 'dispatch';
 export type AgentStatus = 'standby' | 'active' | 'done';
 
+export interface AgentState {
+  status: AgentStatus;
+  data: unknown;
+  thinkingMessage?: string;
+}
+
 export interface FeedItem {
   time: string;
   agent: string;
@@ -23,9 +29,19 @@ export interface ActionPlan {
 }
 
 export interface NotusState {
-  agents: Record<AgentName, { status: AgentStatus; data: unknown }>;
+  agents: Record<AgentName, AgentState>;
   feedItems: FeedItem[];
   actionPlan: ActionPlan | null;
   mapPins: MapPin[];
   stormTrack: { lat: number; lng: number }[];
+}
+
+export interface StreamChunk {
+  agent: AgentName;
+  status?: AgentStatus;
+  thinkingMessage?: string;
+  feed?: string;
+  pin?: MapPin;
+  actionPlan?: ActionPlan;
+  stormTrack?: { lat: number; lng: number }[];
 }
