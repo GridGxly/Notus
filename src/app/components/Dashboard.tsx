@@ -37,7 +37,6 @@ function timestamp() {
 
 export default function Dashboard() {
   const [state, setState] = useState<NotusState>(INITIAL_STATE);
-  const [currentZip, setCurrentZip] = useState('');
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [mobileView, setMobileView] = useState<'sidebar' | 'map'>('sidebar');
   const mountedRef = useRef(true);
@@ -143,9 +142,14 @@ export default function Dashboard() {
     const controller = new AbortController();
     abortRef.current = controller;
 
-    setCurrentZip(zip);
     setSessionId(null);
-    setState(INITIAL_STATE);
+    setState({
+      ...INITIAL_STATE,
+      agents: {
+        ...INITIAL_STATE.agents,
+        dispatch: { status: 'active', data: null, thinkingMessage: 'Initializing' },
+      },
+    });
 
     try {
       const res = await fetch('/api/agents', {
@@ -223,10 +227,13 @@ export default function Dashboard() {
       });
 
       if (!res.ok || !res.body) {
+        const isExpired = res.status === 404;
         applyChunk({
           agent: 'dispatch',
           status: 'done',
-          feed: 'Couldn\'t process your question.',
+          feed: isExpired
+            ? 'Session expired. Enter your zip code and hit GO to start a fresh scan.'
+            : 'Something went wrong processing your question. Try again.',
         });
         return;
       }
@@ -294,7 +301,6 @@ export default function Dashboard() {
         <ActionBar
           actionPlan={state.actionPlan}
           visible={state.agents.dispatch.status === 'done'}
-          zip={currentZip}
         />
       </main>
     </div>

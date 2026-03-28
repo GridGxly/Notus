@@ -24,14 +24,30 @@ async function geocodeZip(zip: string): Promise<{ lat: number; lng: number; stat
 
 const DEFAULT_COORDS = { lat: 27.9506, lng: -82.4572, state: 'FL' };
 
-const sessionStore = new Map<string, {
+const SESSION_TTL = 15 * 60 * 1000;
+
+type SessionEntry = {
   runner: InMemoryRunner;
   sessionId: string;
   zip: string;
   lat: number;
   lng: number;
   stateCode: string;
-}>();
+  createdAt: number;
+};
+
+const globalForSessions = globalThis as typeof globalThis & {
+  __notusSessionStore?: Map<string, SessionEntry>;
+};
+const sessionStore =
+  globalForSessions.__notusSessionStore ??= new Map<string, SessionEntry>();
+
+function pruneExpiredSessions() {
+  const now = Date.now();
+  for (const [id, session] of sessionStore) {
+    if (now - session.createdAt > SESSION_TTL) sessionStore.delete(id);
+  }
+}
 
 function mapAuthor(author: string): AgentName {
   if (author.includes('recon')) return 'recon';
@@ -236,6 +252,7 @@ async function handleInitial(zip: string) {
         userId: 'notus-user',
       });
 
+      pruneExpiredSessions();
       sessionStore.set(session.id, {
         runner,
         sessionId: session.id,
@@ -243,6 +260,7 @@ async function handleInitial(zip: string) {
         lat,
         lng,
         stateCode,
+        createdAt: Date.now(),
       });
 
       await send({ agent: 'dispatch', sessionId: session.id });

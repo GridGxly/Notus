@@ -1,8 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import Script from 'next/script';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import AgentRow from './AgentRow';
 import ActivityFeed from './ActivityFeed';
 import type { AgentName, NotusState } from '../lib/types';
@@ -13,7 +12,6 @@ const AGENT_COLORS: Record<AgentName, string> = {
   shelter: '#8b5cf6',
   dispatch: '#ff6b35',
 };
-
 
 interface SidebarProps {
   agents: NotusState['agents'];
@@ -28,7 +26,8 @@ export default function Sidebar({ agents, feedItems, onDeploy, onFollowUp, showF
   const [followUpText, setFollowUpText] = useState('');
 
   const handleGo = () => {
-    if (zipCode.trim()) onDeploy(zipCode.trim());
+    const zip = zipCode.trim();
+    if (/^\d{5}$/.test(zip)) onDeploy(zip);
   };
 
   const handleFollowUp = () => {
@@ -38,34 +37,14 @@ export default function Sidebar({ agents, feedItems, onDeploy, onFollowUp, showF
     }
   };
 
-  useEffect(() => {
-    const handleToolCall = (e: Event) => {
-      const toolEvent = e as CustomEvent;
-      if (toolEvent.detail.toolName === 'deploy_notus_dashboard') {
-        const zip = toolEvent.detail.parameters.zip_code;
-        if (zip) {
-          setZipCode(zip);
-          onDeploy(zip);
-          toolEvent.detail.setResult('Notus dashboard scanning initiated for zip code ' + zip);
-        } else {
-          toolEvent.detail.setResult('Error: No zip code provided.');
-        }
-      }
-    };
-    window.addEventListener('elevenlabs-client-tool-call', handleToolCall);
-    return () => window.removeEventListener('elevenlabs-client-tool-call', handleToolCall);
-  }, [onDeploy]);
-
   const activeAgents = (Object.keys(agents) as AgentName[]).filter(
     name => agents[name].status === 'active'
   );
 
   const anyActive = activeAgents.length > 0;
+  const isValidZip = /^\d{5}$/.test(zipCode.trim());
 
   return (
-    <>
-    <Script src="https://elevenlabs.io/convai-widget/index.js" strategy="afterInteractive" />
-    <elevenlabs-convai agent-id={process.env.NEXT_PUBLIC_ELEVENLABS_AGENT_ID}></elevenlabs-convai>
     <aside className="w-full md:w-[340px] md:min-w-[340px] bg-black border-r border-white/5 flex flex-col h-full text-[#e5e5e5]">
       <div className="p-5 pb-4 border-b border-white/5">
         <div className="flex flex-row items-center">
@@ -93,9 +72,14 @@ export default function Sidebar({ agents, feedItems, onDeploy, onFollowUp, showF
           />
           <button
             onClick={handleGo}
-            className="bg-[#ff6b35] text-[#0a0a0f] px-3.5 py-2 rounded-md font-bold text-[12px] whitespace-nowrap transition-transform active:scale-95"
+            disabled={anyActive || !isValidZip}
+            className={`px-3.5 py-2 rounded-md font-bold text-[12px] whitespace-nowrap transition-all active:scale-95 ${
+              anyActive || !isValidZip
+                ? 'bg-[#ff6b35]/30 text-[#0a0a0f]/50 cursor-not-allowed'
+                : 'bg-[#ff6b35] text-[#0a0a0f]'
+            }`}
           >
-            GO
+            {anyActive ? 'SCANNING...' : 'GO'}
           </button>
         </div>
       </div>
@@ -161,6 +145,5 @@ export default function Sidebar({ agents, feedItems, onDeploy, onFollowUp, showF
         </div>
       )}
     </aside>
-    </>
   );
 }
