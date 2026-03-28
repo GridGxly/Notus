@@ -9,7 +9,10 @@ export default function ActionBar({ visible = false, actionPlan = null }: Action
   if (!visible) return null;
 
   return (
-    <div className="shrink-0 bg-[#0f0f17] border-t border-[#1a1a2e] px-5 py-3.5 w-full">
+    <div
+      className="shrink-0 bg-[#0f0f17] border-t border-[#1a1a2e] px-5 py-3.5 w-full"
+      style={{ animation: 'slideUp 0.4s ease-out forwards' }}
+    >
       <div className="text-[9px] text-[#ff6b35] tracking-[1.2px] font-semibold mb-2">
         YOUR PLAN
       </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { APIProvider, Map, AdvancedMarker, useMap } from '@vis.gl/react-google-maps';
 import type { MapPin } from '../lib/types';
 
@@ -54,6 +54,31 @@ function StormTrackPolyline({ path }: { path: { lat: number; lng: number }[] }) 
       polyline.setMap(null);
     };
   }, [map, path]);
+
+  return null;
+}
+
+function MapController({ pins, agentsActive }: { pins: MapPin[]; agentsActive: boolean }) {
+  const map = useMap();
+  const prevPinCount = useRef(0);
+
+  useEffect(() => {
+    if (!map) return;
+
+    const userPin = pins.find(p => p.type === 'user');
+    if (userPin && prevPinCount.current === 0 && pins.length > 0) {
+      map.panTo({ lat: userPin.lat, lng: userPin.lng });
+      map.setZoom(13);
+    }
+
+    if (pins.length > 3 && pins.length !== prevPinCount.current) {
+      const bounds = new google.maps.LatLngBounds();
+      pins.forEach(pin => bounds.extend({ lat: pin.lat, lng: pin.lng }));
+      map.fitBounds(bounds, { top: 60, right: 60, bottom: 60, left: 60 });
+    }
+
+    prevPinCount.current = pins.length;
+  }, [map, pins, agentsActive]);
 
   return null;
 }
@@ -113,6 +138,7 @@ export default function MapView({ agentsActive = false, pins = [], stormTrack = 
           })}
 
           <StormTrackPolyline path={stormTrack} />
+          <MapController pins={pins} agentsActive={agentsActive} />
         </Map>
       </APIProvider>
     </div>
