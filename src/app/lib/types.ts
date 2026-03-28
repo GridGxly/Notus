@@ -34,6 +34,7 @@ export interface NotusState {
   actionPlan: ActionPlan | null;
   mapPins: MapPin[];
   stormTrack: { lat: number; lng: number }[];
+  mapView?: { lat: number; lng: number; zoom?: number };
 }
 
 export interface StreamChunk {
@@ -44,4 +45,6 @@ export interface StreamChunk {
   pin?: MapPin;
   actionPlan?: ActionPlan;
   stormTrack?: { lat: number; lng: number }[];
+  mapView?: { lat: number; lng: number; zoom?: number };
+  sessionId?: string;
 }

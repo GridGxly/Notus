@@ -17,18 +17,30 @@ interface SidebarProps {
   agents: NotusState['agents'];
   feedItems: NotusState['feedItems'];
   onDeploy: (zip: string) => void;
+  onFollowUp?: (message: string) => void;
+  showFollowUp?: boolean;
 }
 
-export default function Sidebar({ agents, feedItems, onDeploy }: SidebarProps) {
+export default function Sidebar({ agents, feedItems, onDeploy, onFollowUp, showFollowUp }: SidebarProps) {
   const [zipCode, setZipCode] = useState('');
+  const [followUpText, setFollowUpText] = useState('');
 
   const handleGo = () => {
     if (zipCode.trim()) onDeploy(zipCode.trim());
   };
 
+  const handleFollowUp = () => {
+    if (followUpText.trim() && onFollowUp) {
+      onFollowUp(followUpText.trim());
+      setFollowUpText('');
+    }
+  };
+
   const activeAgents = (Object.keys(agents) as AgentName[]).filter(
     name => agents[name].status === 'active'
   );
+
+  const anyActive = activeAgents.length > 0;
 
   return (
     <aside className="w-[280px] min-w-[280px] bg-[#0f0f17] border-r border-[#1a1a2e] flex flex-col h-full">
@@ -113,6 +125,27 @@ export default function Sidebar({ agents, feedItems, onDeploy }: SidebarProps) {
 
         <ActivityFeed items={feedItems} />
       </div>
+
+      {showFollowUp && !anyActive && (
+        <div className="px-4 py-3 border-t border-[#1a1a2e]">
+          <div className="flex gap-1.5">
+            <input
+              type="text"
+              placeholder="Ask a follow-up..."
+              value={followUpText}
+              onChange={(e) => setFollowUpText(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleFollowUp()}
+              className="flex-1 bg-[#14141f] border border-[#1e293b] text-[#e2e8f0] px-2.5 py-1.5 rounded-md text-[12px] outline-none placeholder:text-[#334155]"
+            />
+            <button
+              onClick={handleFollowUp}
+              className="bg-[#ff6b35]/10 text-[#ff6b35] px-2.5 py-1.5 rounded-md text-[11px] font-bold hover:bg-[#ff6b35]/20 transition-colors"
+            >
+              Ask
+            </button>
+          </div>
+        </div>
+      )}
     </aside>
   );
 }

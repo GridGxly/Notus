@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { APIProvider, Map, AdvancedMarker, useMap } from '@vis.gl/react-google-maps';
 import type { MapPin } from '../lib/types';
 
@@ -8,6 +8,7 @@ interface MapViewProps {
   agentsActive?: boolean;
   pins?: MapPin[];
   stormTrack?: { lat: number; lng: number }[];
+  mapView?: { lat: number; lng: number; zoom?: number };
 }
 
 const mapStyles = [
@@ -40,13 +41,7 @@ function StormTrackPolyline({ path }: { path: { lat: number; lng: number }[] }) 
       strokeColor: '#ef4444',
       strokeOpacity: 0.6,
       strokeWeight: 2,
-      icons: [
-        {
-          icon: lineSymbol,
-          offset: '0',
-          repeat: '12px',
-        },
-      ],
+      icons: [{ icon: lineSymbol, offset: '0', repeat: '12px' }],
       map,
     });
 
@@ -58,9 +53,30 @@ function StormTrackPolyline({ path }: { path: { lat: number; lng: number }[] }) 
   return null;
 }
 
-function MapController({ pins, agentsActive }: { pins: MapPin[]; agentsActive: boolean }) {
+function MapController({
+  pins,
+  agentsActive,
+  mapView,
+}: {
+  pins: MapPin[];
+  agentsActive: boolean;
+  mapView?: { lat: number; lng: number; zoom?: number };
+}) {
   const map = useMap();
   const prevPinCount = useRef(0);
+  const lastViewKey = useRef('');
+
+  useEffect(() => {
+    if (!map || !mapView) return;
+    const key = `${mapView.lat.toFixed(4)},${mapView.lng.toFixed(4)},${mapView.zoom}`;
+    if (key === lastViewKey.current) return;
+    lastViewKey.current = key;
+
+    map.panTo({ lat: mapView.lat, lng: mapView.lng });
+    if (mapView.zoom) {
+      map.setZoom(mapView.zoom);
+    }
+  }, [map, mapView]);
 
   useEffect(() => {
     if (!map) return;
@@ -83,10 +99,50 @@ function MapController({ pins, agentsActive }: { pins: MapPin[]; agentsActive: b
   return null;
 }
 
-export default function MapView({ agentsActive = false, pins = [], stormTrack = [] }: MapViewProps) {
-  const center = { lat: 27.9506, lng: -82.4572 };
+function PinTooltip({ pin, onClose }: { pin: MapPin; onClose: () => void }) {
+  return (
+    <AdvancedMarker position={{ lat: pin.lat, lng: pin.lng }} zIndex={100}>
+      <div
+        className="bg-[#14141f] border border-[#1a1a2e] rounded-lg p-2.5 shadow-2xl min-w-[160px] -translate-y-12"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          onClick={onClose}
+          className="absolute top-1 right-1.5 text-[#475569] hover:text-[#e2e8f0] text-[10px]"
+        >
+          x
+        </button>
+        <div
+          className="text-[11px] font-semibold mb-0.5"
+          style={{ color: pin.type === 'supply' ? '#f59e0b' : pin.type === 'shelter' ? '#8b5cf6' : '#22c55e' }}
+        >
+          {pin.label}
+        </div>
+        <div className="text-[9px] text-[#475569] mb-1.5">
+          {pin.type === 'supply' ? 'Gas Station / Supply' : pin.type === 'shelter' ? 'Emergency Shelter' : 'Your Location'}
+        </div>
+        <a
+          href={`https://www.google.com/maps/dir/?api=1&destination=${pin.lat},${pin.lng}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[9px] text-[#3b82f6] font-medium hover:underline"
+        >
+          Get Directions &rarr;
+        </a>
+      </div>
+    </AdvancedMarker>
+  );
+}
 
+export default function MapView({
+  agentsActive = false,
+  pins = [],
+  stormTrack = [],
+  mapView,
+}: MapViewProps) {
+  const center = { lat: 27.9506, lng: -82.4572 };
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || 'AIzaSyFakePlaceholderForUI';
+  const [selectedPin, setSelectedPin] = useState<MapPin | null>(null);
 
   return (
     <div className="flex-1 min-h-0 relative bg-[var(--bg-card)] overflow-hidden">
@@ -108,25 +164,34 @@ export default function MapView({ agentsActive = false, pins = [], stormTrack = 
           mapId="DEMO_MAP_ID"
           styles={mapStyles}
           style={{ width: '100%', height: '100%' }}
+          onClick={() => setSelectedPin(null)}
         >
           {pins.map((pin, index) => {
             if (pin.type === 'supply') {
               return (
-                <AdvancedMarker key={index} position={{ lat: pin.lat, lng: pin.lng }}>
-                  <div className="w-3.5 h-3.5 rounded-full bg-[#f59e0b] border-[1.5px] border-[#0d1117] shadow-[0_0_8px_rgba(245,158,11,0.6)]" />
+                <AdvancedMarker
+                  key={`supply-${index}`}
+                  position={{ lat: pin.lat, lng: pin.lng }}
+                  onClick={() => setSelectedPin(pin)}
+                >
+                  <div className="w-3.5 h-3.5 rounded-full bg-[#f59e0b] border-[1.5px] border-[#0d1117] shadow-[0_0_8px_rgba(245,158,11,0.6)] cursor-pointer hover:scale-125 transition-transform" />
                 </AdvancedMarker>
               );
             }
             if (pin.type === 'shelter') {
               return (
-                <AdvancedMarker key={index} position={{ lat: pin.lat, lng: pin.lng }}>
-                  <div className="w-3.5 h-3.5 bg-[#8b5cf6] border-[1.5px] border-[#0d1117] shadow-[0_0_8px_rgba(139,92,246,0.6)]" />
+                <AdvancedMarker
+                  key={`shelter-${index}`}
+                  position={{ lat: pin.lat, lng: pin.lng }}
+                  onClick={() => setSelectedPin(pin)}
+                >
+                  <div className="w-3.5 h-3.5 bg-[#8b5cf6] border-[1.5px] border-[#0d1117] shadow-[0_0_8px_rgba(139,92,246,0.6)] cursor-pointer hover:scale-125 transition-transform" />
                 </AdvancedMarker>
               );
             }
             if (pin.type === 'user') {
               return (
-                <AdvancedMarker key={index} position={{ lat: pin.lat, lng: pin.lng }} zIndex={50}>
+                <AdvancedMarker key={`user-${index}`} position={{ lat: pin.lat, lng: pin.lng }} zIndex={50}>
                   <div className="relative flex items-center justify-center w-5 h-5">
                     <div className="absolute w-full h-full bg-[#22c55e] rounded-full animate-ping opacity-60" />
                     <div className="relative w-2 h-2 bg-[#22c55e] border border-[#0d1117] rounded-full" />
@@ -137,8 +202,12 @@ export default function MapView({ agentsActive = false, pins = [], stormTrack = 
             return null;
           })}
 
+          {selectedPin && selectedPin.type !== 'user' && (
+            <PinTooltip pin={selectedPin} onClose={() => setSelectedPin(null)} />
+          )}
+
           <StormTrackPolyline path={stormTrack} />
-          <MapController pins={pins} agentsActive={agentsActive} />
+          <MapController pins={pins} agentsActive={agentsActive} mapView={mapView} />
         </Map>
       </APIProvider>
     </div>

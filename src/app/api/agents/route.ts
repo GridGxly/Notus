@@ -1,6 +1,6 @@
 import { InMemoryRunner, isFinalResponse, stringifyContent } from '@google/adk';
 import { rootAgent } from '../../agents/dispatch';
-import type { MapPin, ActionPlan, StreamChunk } from '../../lib/types';
+import type { MapPin, ActionPlan, StreamChunk, AgentName } from '../../lib/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,7 +21,16 @@ const ZIP_COORDS: Record<string, { lat: number; lng: number; state: string }> = 
 
 const DEFAULT_COORDS = { lat: 27.9506, lng: -82.4572, state: 'FL' };
 
-function mapAuthor(author: string): 'recon' | 'supply' | 'shelter' | 'dispatch' {
+const sessionStore = new Map<string, {
+  runner: InMemoryRunner;
+  sessionId: string;
+  zip: string;
+  lat: number;
+  lng: number;
+  stateCode: string;
+}>();
+
+function mapAuthor(author: string): AgentName {
   if (author.includes('recon')) return 'recon';
   if (author.includes('supply')) return 'supply';
   if (author.includes('shelter')) return 'shelter';
@@ -87,11 +96,14 @@ function buildFallbackPlan(
 
 const wait = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
-export async function POST(request: Request) {
-  const { zip } = await request.json();
-  const coords = ZIP_COORDS[zip] || DEFAULT_COORDS;
-  const { lat, lng, state: stateCode } = coords;
+const SSE_HEADERS = {
+  'Content-Type': 'text/event-stream',
+  'Cache-Control': 'no-cache, no-transform',
+  Connection: 'keep-alive',
+  'X-Accel-Buffering': 'no',
+};
 
+function createStream() {
   const { readable, writable } = new TransformStream();
   const writer = writable.getWriter();
   const encoder = new TextEncoder();
@@ -107,19 +119,101 @@ export async function POST(request: Request) {
     return p;
   };
 
+  const finish = async () => {
+    await writeQueue;
+    await writer.write(encoder.encode('data: [DONE]\n\n'));
+    await writer.close();
+  };
+
+  return { readable, send, finish, writeQueue };
+}
+
+function extractPins(
+  ev: Record<string, unknown>,
+  send: (chunk: StreamChunk) => Promise<void>,
+  supplyPins: MapPin[],
+  shelterPins: MapPin[],
+) {
+  const contentObj = ev.content as Record<string, unknown> | undefined;
+  const parts = (contentObj?.parts as Array<Record<string, unknown>>) || [];
+  const promises: Promise<void>[] = [];
+
+  for (const part of parts) {
+    const funcResp = part.functionResponse as
+      | { response: Record<string, unknown> }
+      | undefined;
+    const resp = funcResp?.response;
+    if (!resp) continue;
+
+    if (Array.isArray(resp.places)) {
+      for (const p of resp.places as Array<Record<string, unknown>>) {
+        if (typeof p.lat === 'number' && typeof p.lng === 'number') {
+          const pin: MapPin = {
+            lat: p.lat,
+            lng: p.lng,
+            type: 'supply',
+            label: (p.name as string) || 'Gas Station',
+          };
+          supplyPins.push(pin);
+          promises.push(
+            send({
+              agent: 'supply',
+              pin,
+              thinkingMessage: `Found ${pin.label}`,
+              feed: `${pin.label} — ${(p.isOpen as boolean) ? 'OPEN' : 'status unknown'}`,
+              mapView: { lat: p.lat, lng: p.lng, zoom: 14 },
+            }),
+          );
+        }
+      }
+    }
+
+    if (Array.isArray(resp.shelters)) {
+      for (const s of resp.shelters as Array<Record<string, unknown>>) {
+        if (typeof s.lat === 'number' && typeof s.lng === 'number') {
+          const pin: MapPin = {
+            lat: s.lat,
+            lng: s.lng,
+            type: 'shelter',
+            label: (s.name as string) || 'Shelter',
+          };
+          shelterPins.push(pin);
+          promises.push(
+            send({
+              agent: 'shelter',
+              pin,
+              thinkingMessage: `Found ${pin.label}`,
+              feed: `${pin.label} — potential shelter`,
+              mapView: { lat: s.lat, lng: s.lng, zoom: 14 },
+            }),
+          );
+        }
+      }
+    }
+  }
+
+  return Promise.all(promises);
+}
+
+async function handleInitial(zip: string) {
+  const coords = ZIP_COORDS[zip] || DEFAULT_COORDS;
+  const { lat, lng, state: stateCode } = coords;
+  const { readable, send, finish } = createStream();
+
   (async () => {
     try {
       await send({
         agent: 'dispatch',
         status: 'active',
         thinkingMessage: 'Deploying agents',
-        feed: `Got it — looking into conditions near ${zip} now.`,
+        feed: `On it — checking conditions near ${zip}.`,
+        mapView: { lat, lng, zoom: 11 },
       });
       await send({
         agent: 'recon',
         status: 'active',
-        thinkingMessage: 'Querying NWS alerts',
-        feed: 'Pulling the latest weather data from NWS.',
+        thinkingMessage: 'Checking for storm warnings',
+        feed: 'Let me check the latest weather alerts for your area.',
       });
 
       const runner = new InMemoryRunner({ agent: rootAgent, appName: 'notus' });
@@ -127,6 +221,17 @@ export async function POST(request: Request) {
         appName: 'notus',
         userId: 'notus-user',
       });
+
+      sessionStore.set(session.id, {
+        runner,
+        sessionId: session.id,
+        zip,
+        lat,
+        lng,
+        stateCode,
+      });
+
+      await send({ agent: 'dispatch', sessionId: session.id });
 
       const userMessage = {
         role: 'user' as const,
@@ -144,25 +249,22 @@ export async function POST(request: Request) {
       const shelterPins: MapPin[] = [];
 
       const reconMsgs = [
-        'Querying NWS alerts',
-        'Reading storm data',
-        'Analyzing wind patterns',
-        'Assessing threat level',
-        'Checking forecast models',
-        'Scanning coastal advisories',
-        'Evaluating storm surge risk',
+        'Checking for storm warnings',
+        'Looking at current weather',
+        'Checking wind speeds',
+        'Figuring out how serious this is',
+        'Scanning for advisories',
+        'Reading the latest forecast',
       ];
       const supplyMsgs = [
-        'Scanning nearby stations',
-        'Checking fuel availability',
-        'Mapping supply routes',
-        'Verifying open status',
+        'Finding open gas stations',
+        'Checking if they have fuel',
+        'Looking for the closest ones',
       ];
       const shelterMsgs = [
-        'Locating emergency shelters',
-        'Verifying capacity',
-        'Checking access routes',
-        'Confirming availability',
+        'Finding safe places to go',
+        'Checking if they have room',
+        'Making sure you can get there',
       ];
       let beatIdx = 0;
 
@@ -216,14 +318,15 @@ export async function POST(request: Request) {
               await send({ agent: 'recon', status: 'done' });
               await send({
                 agent: 'dispatch',
-                thinkingMessage: 'Coordinating supply + shelter',
+                thinkingMessage: 'Coordinating supply + shelter search',
               });
             }
             await send({
               agent: 'supply',
               status: 'active',
-              thinkingMessage: 'Finding gas stations',
-              feed: 'Searching for open gas stations nearby.',
+              thinkingMessage: 'Finding open gas stations',
+              feed: 'Looking for gas stations that are still open near you.',
+              mapView: { lat, lng, zoom: 13 },
             });
           } else {
             if (content && content.length > 15 && !looksLikeJson(content)) {
@@ -242,8 +345,8 @@ export async function POST(request: Request) {
             await send({
               agent: 'shelter',
               status: 'active',
-              thinkingMessage: 'Finding shelters',
-              feed: 'Searching for emergency shelters nearby.',
+              thinkingMessage: 'Finding safe places nearby',
+              feed: 'Finding shelters and safe places nearby.',
             });
           } else {
             if (content && content.length > 15 && !looksLikeJson(content)) {
@@ -253,55 +356,7 @@ export async function POST(request: Request) {
         }
 
         try {
-          const contentObj = ev.content as Record<string, unknown> | undefined;
-          const parts = (contentObj?.parts as Array<Record<string, unknown>>) || [];
-          for (const part of parts) {
-            const funcResp = part.functionResponse as
-              | { response: Record<string, unknown> }
-              | undefined;
-            const resp = funcResp?.response;
-            if (!resp) continue;
-
-            if (Array.isArray(resp.places)) {
-              for (const p of resp.places as Array<Record<string, unknown>>) {
-                if (typeof p.lat === 'number' && typeof p.lng === 'number') {
-                  const pin: MapPin = {
-                    lat: p.lat,
-                    lng: p.lng,
-                    type: 'supply',
-                    label: (p.name as string) || 'Gas Station',
-                  };
-                  supplyPins.push(pin);
-                  await send({
-                    agent: 'supply',
-                    pin,
-                    thinkingMessage: `Found ${pin.label}`,
-                    feed: `${pin.label} — ${(p.isOpen as boolean) ? 'OPEN' : 'status unknown'}`,
-                  });
-                }
-              }
-            }
-
-            if (Array.isArray(resp.shelters)) {
-              for (const s of resp.shelters as Array<Record<string, unknown>>) {
-                if (typeof s.lat === 'number' && typeof s.lng === 'number') {
-                  const pin: MapPin = {
-                    lat: s.lat,
-                    lng: s.lng,
-                    type: 'shelter',
-                    label: (s.name as string) || 'Shelter',
-                  };
-                  shelterPins.push(pin);
-                  await send({
-                    agent: 'shelter',
-                    pin,
-                    thinkingMessage: `Found ${pin.label}`,
-                    feed: `${pin.label} — potential shelter`,
-                  });
-                }
-              }
-            }
-          }
+          await extractPins(ev, send, supplyPins, shelterPins);
         } catch {}
 
         if (isFinalResponse(event) && content) {
@@ -322,8 +377,8 @@ export async function POST(request: Request) {
         status: 'done',
         feed: supplyStarted
           ? supplyPins.length > 0
-            ? `Found ${supplyPins.length} supply location${supplyPins.length > 1 ? 's' : ''}.`
-            : 'No supply data available from API.'
+            ? `Found ${supplyPins.length} gas station${supplyPins.length > 1 ? 's' : ''} near you.`
+            : 'No fuel data available right now.'
           : undefined,
       });
       await wait(300);
@@ -333,15 +388,22 @@ export async function POST(request: Request) {
         status: 'done',
         feed: shelterStarted
           ? shelterPins.length > 0
-            ? `Found ${shelterPins.length} potential shelter${shelterPins.length > 1 ? 's' : ''}.`
-            : 'No shelter data available from API.'
+            ? `Found ${shelterPins.length} shelter${shelterPins.length > 1 ? 's' : ''} you could go to.`
+            : 'No shelter data available right now.'
           : undefined,
       });
       await wait(300);
 
       await send({
         agent: 'dispatch',
+        thinkingMessage: 'Putting your plan together',
+      });
+      await wait(400);
+
+      await send({
+        agent: 'dispatch',
         pin: { lat, lng, type: 'user', label: 'You' },
+        mapView: { lat, lng, zoom: 12 },
       });
       await wait(200);
 
@@ -387,12 +449,8 @@ export async function POST(request: Request) {
             if (typeof p.lat === 'number' && typeof p.lng === 'number') {
               await send({
                 agent: 'supply',
-                pin: {
-                  lat: p.lat,
-                  lng: p.lng,
-                  type: 'supply',
-                  label: (p.label as string) || 'Supply',
-                },
+                pin: { lat: p.lat, lng: p.lng, type: 'supply', label: (p.label as string) || 'Supply' },
+                mapView: { lat: p.lat, lng: p.lng, zoom: 14 },
               });
             }
           }
@@ -402,12 +460,8 @@ export async function POST(request: Request) {
             if (typeof p.lat === 'number' && typeof p.lng === 'number') {
               await send({
                 agent: 'shelter',
-                pin: {
-                  lat: p.lat,
-                  lng: p.lng,
-                  type: 'shelter',
-                  label: (p.label as string) || 'Shelter',
-                },
+                pin: { lat: p.lat, lng: p.lng, type: 'shelter', label: (p.label as string) || 'Shelter' },
+                mapView: { lat: p.lat, lng: p.lng, zoom: 14 },
               });
             }
           }
@@ -419,32 +473,158 @@ export async function POST(request: Request) {
       await send({
         agent: 'dispatch',
         status: 'done',
-        feed: 'Your action plan is ready. Stay safe out there. 🌀',
+        feed: 'Your plan is ready. Stay safe out there.',
         actionPlan,
       });
 
-      await writeQueue;
-      await writer.write(encoder.encode('data: [DONE]\n\n'));
+      await finish();
     } catch (err) {
       console.error('Agent route error:', err);
       await send({
         agent: 'dispatch',
         status: 'done',
-        feed: `Agent error: ${String(err).slice(0, 200)}`,
+        feed: `Something went wrong: ${String(err).slice(0, 200)}`,
       });
-      await writeQueue;
-      await writer.write(encoder.encode('data: [DONE]\n\n'));
-    } finally {
-      await writer.close();
+      await finish();
     }
   })();
 
-  return new Response(readable, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache, no-transform',
-      Connection: 'keep-alive',
-      'X-Accel-Buffering': 'no',
-    },
-  });
+  return new Response(readable, { headers: SSE_HEADERS });
+}
+
+async function handleFollowUp(storedSessionId: string, question: string) {
+  const stored = sessionStore.get(storedSessionId);
+  if (!stored) {
+    return new Response(
+      JSON.stringify({ error: 'Session expired. Please start a new search.' }),
+      { status: 404, headers: { 'Content-Type': 'application/json' } },
+    );
+  }
+
+  const { runner, sessionId, lat, lng } = stored;
+  const { readable, send, finish } = createStream();
+
+  (async () => {
+    try {
+      await send({
+        agent: 'dispatch',
+        status: 'active',
+        thinkingMessage: 'Reading your question',
+        feed: `"${question}"`,
+      });
+
+      let adkDone = false;
+      const followUpMsgs = [
+        'Thinking about your question',
+        'Checking what I found earlier',
+        'Looking into it',
+        'Putting an answer together',
+      ];
+      let beatIdx = 0;
+
+      const heartbeat = (async () => {
+        while (!adkDone) {
+          for (let i = 0; i < 18 && !adkDone; i++) await wait(100);
+          if (adkDone) break;
+          beatIdx++;
+          await send({
+            agent: 'dispatch',
+            thinkingMessage: followUpMsgs[beatIdx % followUpMsgs.length],
+          });
+        }
+      })();
+
+      let finalText = '';
+      const newSupplyPins: MapPin[] = [];
+      const newShelterPins: MapPin[] = [];
+
+      for await (const event of runner.runAsync({
+        userId: 'notus-user',
+        sessionId,
+        newMessage: {
+          role: 'user' as const,
+          parts: [{ text: question }],
+        },
+      })) {
+        const ev = event as unknown as Record<string, unknown>;
+        const author = (ev.author as string) || '';
+        const agentName = mapAuthor(author);
+        const content = stringifyContent(event);
+
+        if (agentName !== 'dispatch' && content && content.length > 15 && !looksLikeJson(content)) {
+          if (agentName === 'recon') {
+            await send({
+              agent: 'recon',
+              status: 'active',
+              thinkingMessage: 'Checking again',
+              feed: content.slice(0, 250),
+            });
+          } else if (agentName === 'supply') {
+            await send({
+              agent: 'supply',
+              status: 'active',
+              thinkingMessage: 'Searching',
+              feed: content.slice(0, 250),
+            });
+          } else if (agentName === 'shelter') {
+            await send({
+              agent: 'shelter',
+              status: 'active',
+              thinkingMessage: 'Looking',
+              feed: content.slice(0, 250),
+            });
+          }
+        }
+
+        try {
+          await extractPins(ev, send, newSupplyPins, newShelterPins);
+        } catch {}
+
+        if (isFinalResponse(event) && content) {
+          finalText = content;
+        }
+      }
+
+      adkDone = true;
+      await heartbeat;
+
+      let answer = finalText;
+      if (looksLikeJson(answer)) {
+        const cleaned = answer
+          .replace(/```[\s\S]*?```/g, '')
+          .replace(/\{[\s\S]*?\}/g, '')
+          .trim();
+        if (cleaned.length > 20) answer = cleaned;
+      }
+
+      await send({
+        agent: 'dispatch',
+        status: 'done',
+        feed: answer.slice(0, 500) || 'I couldn\'t find more info on that. Try asking something else.',
+        mapView: { lat, lng, zoom: 12 },
+      });
+
+      await finish();
+    } catch (err) {
+      console.error('Follow-up error:', err);
+      await send({
+        agent: 'dispatch',
+        status: 'done',
+        feed: `Couldn't process that: ${String(err).slice(0, 200)}`,
+      });
+      await finish();
+    }
+  })();
+
+  return new Response(readable, { headers: SSE_HEADERS });
+}
+
+export async function POST(request: Request) {
+  const body = await request.json();
+
+  if (body.followUp && body.sessionId) {
+    return handleFollowUp(body.sessionId, body.followUp);
+  }
+
+  return handleInitial(body.zip);
 }

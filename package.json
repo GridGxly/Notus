@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@elevenlabs/elevenlabs-js": "^2.40.0",
     "@google/adk": "^0.6.0",
     "@google/genai": "^1.47.0",
     "@vis.gl/react-google-maps": "^1.8.1",

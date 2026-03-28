@@ -66,3 +66,24 @@ body {
   from { opacity: 0; transform: translateY(20px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+@keyframes voice-bar {
+  0%, 100% { height: 3px; }
+  50% { height: 12px; }
+}
+
+.animate-voice-bar1 {
+  animation: voice-bar 0.5s ease-in-out infinite;
+}
+
+.animate-voice-bar2 {
+  animation: voice-bar 0.5s ease-in-out 0.1s infinite;
+}
+
+.animate-voice-bar3 {
+  animation: voice-bar 0.5s ease-in-out 0.2s infinite;
+}
+
+.animate-voice-bar4 {
+  animation: voice-bar 0.5s ease-in-out 0.3s infinite;
+}

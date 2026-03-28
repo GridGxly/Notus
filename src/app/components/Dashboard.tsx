@@ -37,6 +37,8 @@ function timestamp() {
 
 export default function Dashboard() {
   const [state, setState] = useState<NotusState>(INITIAL_STATE);
+  const [currentZip, setCurrentZip] = useState('');
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const mountedRef = useRef(true);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -50,6 +52,11 @@ export default function Dashboard() {
 
   const applyChunk = useCallback((chunk: StreamChunk) => {
     if (!mountedRef.current) return;
+
+    if (chunk.sessionId) {
+      setSessionId(chunk.sessionId);
+    }
+
     setState(prev => {
       const next = { ...prev };
       const agentKey = chunk.agent;
@@ -92,9 +99,41 @@ export default function Dashboard() {
         next.actionPlan = chunk.actionPlan;
       }
 
+      if (chunk.mapView) {
+        next.mapView = chunk.mapView;
+      }
+
       return next;
     });
   }, []);
+
+  const readStream = useCallback(async (res: Response, controller: AbortController) => {
+    if (!res.body) return;
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (controller.signal.aborted) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6).trim();
+          if (data === '[DONE]') continue;
+          try {
+            const chunk: StreamChunk = JSON.parse(data);
+            applyChunk(chunk);
+          } catch {}
+        }
+      }
+    }
+  }, [applyChunk]);
 
   const handleDeploy = useCallback(async (zip: string) => {
     if (!zip) return;
@@ -103,6 +142,8 @@ export default function Dashboard() {
     const controller = new AbortController();
     abortRef.current = controller;
 
+    setCurrentZip(zip);
+    setSessionId(null);
     setState(INITIAL_STATE);
 
     try {
@@ -122,30 +163,7 @@ export default function Dashboard() {
         return;
       }
 
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        if (controller.signal.aborted) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6).trim();
-            if (data === '[DONE]') continue;
-            try {
-              const chunk: StreamChunk = JSON.parse(data);
-              applyChunk(chunk);
-            } catch {}
-          }
-        }
-      }
+      await readStream(res, controller);
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
         if (!mountedRef.current) return;
@@ -176,11 +194,59 @@ export default function Dashboard() {
         });
       }
     }
-  }, [applyChunk]);
+  }, [applyChunk, readStream]);
+
+  const handleFollowUp = useCallback(async (message: string) => {
+    if (!message || !sessionId) return;
+
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    setState(prev => ({
+      ...prev,
+      agents: {
+        recon: { ...prev.agents.recon, status: prev.agents.recon.status === 'done' ? 'done' : prev.agents.recon.status, data: null },
+        supply: { ...prev.agents.supply, status: prev.agents.supply.status === 'done' ? 'done' : prev.agents.supply.status, data: null },
+        shelter: { ...prev.agents.shelter, status: prev.agents.shelter.status === 'done' ? 'done' : prev.agents.shelter.status, data: null },
+        dispatch: { status: 'active', data: null, thinkingMessage: 'Reading your question' },
+      },
+    }));
+
+    try {
+      const res = await fetch('/api/agents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, followUp: message }),
+        signal: controller.signal,
+      });
+
+      if (!res.ok || !res.body) {
+        applyChunk({
+          agent: 'dispatch',
+          status: 'done',
+          feed: 'Couldn\'t process your question.',
+        });
+        return;
+      }
+
+      await readStream(res, controller);
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError' && mountedRef.current) {
+        applyChunk({
+          agent: 'dispatch',
+          status: 'done',
+          feed: 'Connection lost. Try asking again.',
+        });
+      }
+    }
+  }, [sessionId, applyChunk, readStream]);
 
   const agentsActive = Object.values(state.agents).some(
     a => a.status === 'active' || a.status === 'done',
   );
+
+  const planReady = state.agents.dispatch.status === 'done' && state.actionPlan !== null;
 
   return (
     <div className="flex h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
@@ -188,16 +254,20 @@ export default function Dashboard() {
         agents={state.agents}
         feedItems={state.feedItems}
         onDeploy={handleDeploy}
+        onFollowUp={handleFollowUp}
+        showFollowUp={planReady && !!sessionId}
       />
       <main className="flex-1 flex flex-col relative min-h-screen">
         <MapView
           agentsActive={agentsActive}
           pins={state.mapPins}
           stormTrack={state.stormTrack}
+          mapView={state.mapView}
         />
         <ActionBar
           actionPlan={state.actionPlan}
           visible={state.agents.dispatch.status === 'done'}
+          zip={currentZip}
         />
       </main>
     </div>
