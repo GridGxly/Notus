@@ -214,7 +214,6 @@ export async function POST(request: Request) {
             }
           }
 
-          // Extract pins from tool results (functionResponse parts)
           try {
             const contentObj = ev.content as Record<string, unknown> | undefined;
             const parts = (contentObj?.parts as Array<Record<string, unknown>>) || [];
