@@ -70,11 +70,18 @@ export default function Dashboard() {
       setState(prev => ({ ...prev, mapPins: [...prev.mapPins, pin] }));
     };
 
-    const setAgentStatus = (name: AgentName, status: AgentStatus) => {
+    const setAgentStatus = (name: AgentName, status: AgentStatus, thinkingMessage?: string) => {
       if (!mountedRef.current) return;
       setState(prev => ({
         ...prev,
-        agents: { ...prev.agents, [name]: { ...prev.agents[name], status } },
+        agents: {
+          ...prev.agents,
+          [name]: {
+            ...prev.agents[name],
+            status,
+            thinkingMessage: status === 'done' ? undefined : thinkingMessage,
+          },
+        },
       }));
     };
 
@@ -82,7 +89,7 @@ export default function Dashboard() {
       ...INITIAL_STATE,
       agents: {
         ...INITIAL_STATE.agents,
-        dispatch: { status: 'active', data: null },
+        dispatch: { status: 'active', data: null, thinkingMessage: 'Deploying agents' },
       },
       feedItems: [{
         time: new Date().toLocaleTimeString('en-US', { hour12: false, hour: 'numeric', minute: 'numeric', second: 'numeric' }),
@@ -94,8 +101,18 @@ export default function Dashboard() {
 
     await wait(200);
     if (!mountedRef.current) return;
-    setAgentStatus('recon', 'active');
+    setAgentStatus('recon', 'active', 'Checking weather alerts');
     addFeed('recon', AGENT_COLORS.recon, 'Querying NWS weather data...');
+
+    const reconThinking = ['Checking weather alerts', 'Reading storm warnings', 'Analyzing wind + rain', 'Rating the threat'];
+    let thinkingIdx = 0;
+    const thinkingInterval = setInterval(() => {
+      if (!mountedRef.current) return;
+      thinkingIdx = (thinkingIdx + 1) % reconThinking.length;
+      setAgentStatus('recon', 'active', reconThinking[thinkingIdx]);
+    }, 2000);
+
+    setAgentStatus('dispatch', 'active', 'Waiting on recon');
 
     let data: NotusState;
     try {
@@ -106,12 +123,14 @@ export default function Dashboard() {
       });
       data = await res.json();
     } catch {
+      clearInterval(thinkingInterval);
       if (!mountedRef.current) return;
       addFeed('dispatch', AGENT_COLORS.dispatch, 'Error contacting agents. Please try again.');
       setAgentStatus('dispatch', 'done');
       return;
     }
 
+    clearInterval(thinkingInterval);
     fullResultRef.current = data;
 
     await wait(500);
@@ -136,8 +155,9 @@ export default function Dashboard() {
 
     await wait(800);
     if (!mountedRef.current) return;
-    setAgentStatus('supply', 'active');
-    setAgentStatus('shelter', 'active');
+    setAgentStatus('dispatch', 'active', 'Sending out supply + shelter');
+    setAgentStatus('supply', 'active', 'Finding gas stations');
+    setAgentStatus('shelter', 'active', 'Finding shelters');
     addFeed('supply', AGENT_COLORS.supply, 'Searching gas stations...');
     addFeed('shelter', AGENT_COLORS.shelter, 'Locating shelters...');
 
@@ -146,6 +166,7 @@ export default function Dashboard() {
     for (let i = 0; i < supplyPins.length; i++) {
       await wait(300);
       if (!mountedRef.current) return;
+      setAgentStatus('supply', 'active', 'Checking availability');
       addPin(supplyPins[i]);
       if (supplyFeedItems[i]) {
         addFeed(supplyFeedItems[i].agent, supplyFeedItems[i].color, supplyFeedItems[i].message);
@@ -158,6 +179,7 @@ export default function Dashboard() {
     for (let i = 0; i < shelterPins.length; i++) {
       await wait(300);
       if (!mountedRef.current) return;
+      setAgentStatus('shelter', 'active', 'Checking capacity');
       addPin(shelterPins[i]);
       if (shelterFeedItems[i]) {
         addFeed(shelterFeedItems[i].agent, shelterFeedItems[i].color, shelterFeedItems[i].message);
@@ -166,6 +188,9 @@ export default function Dashboard() {
     setAgentStatus('shelter', 'done');
 
     await wait(500);
+    if (!mountedRef.current) return;
+    setAgentStatus('dispatch', 'active', 'Putting it all together');
+    await wait(400);
     if (!mountedRef.current) return;
     setAgentStatus('dispatch', 'done');
     setState(prev => ({ ...prev, actionPlan: data.actionPlan }));
