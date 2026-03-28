@@ -1,8 +1,11 @@
+import type { ActionPlan } from '../lib/types';
+
 interface ActionBarProps {
   visible?: boolean;
+  actionPlan?: ActionPlan | null;
 }
 
-export default function ActionBar({ visible = false }: ActionBarProps) {
+export default function ActionBar({ visible = false, actionPlan = null }: ActionBarProps) {
   if (!visible) return null;
 
   return (
@@ -15,32 +18,32 @@ export default function ActionBar({ visible = false }: ActionBarProps) {
           <div className="text-[9px] font-semibold tracking-[0.5px] mb-0.5 text-[#ef4444]">
             THREAT
           </div>
-          <div className="text-[#cbd5e1] mb-0.5">Level 3/5</div>
-          <div className="text-[10px] text-[#475569]">Winds 110mph</div>
+          <div className="text-[#cbd5e1] mb-0.5">{actionPlan?.threat?.level || 'Analyzing...'}</div>
+          <div className="text-[10px] text-[#475569]">{actionPlan?.threat?.detail || '--'}</div>
         </div>
 
         <div className="flex flex-col">
           <div className="text-[9px] font-semibold tracking-[0.5px] mb-0.5 text-[#f59e0b]">
             NEAREST FUEL
           </div>
-          <div className="text-[#cbd5e1] mb-0.5">Shell, 0.8mi E</div>
-          <div className="text-[10px] text-[#22c55e]">OPEN</div>
+          <div className="text-[#cbd5e1] mb-0.5">{actionPlan?.fuel?.name || 'Locating...'}</div>
+          <div className="text-[10px] text-[#22c55e]">{actionPlan?.fuel?.status || '--'}</div>
         </div>
 
         <div className="flex flex-col">
           <div className="text-[9px] font-semibold tracking-[0.5px] mb-0.5 text-[#8b5cf6]">
             SHELTER
           </div>
-          <div className="text-[#cbd5e1] mb-0.5">Marshall Ctr, 0.3mi</div>
-          <div className="text-[10px] text-[#22c55e]">CAPACITY OK</div>
+          <div className="text-[#cbd5e1] mb-0.5">{actionPlan?.shelter?.name || 'Locating...'}</div>
+          <div className="text-[10px] text-[#22c55e]">{actionPlan?.shelter?.status || '--'}</div>
         </div>
 
         <div className="flex flex-col">
           <div className="text-[9px] font-semibold tracking-[0.5px] mb-0.5 text-[#22c55e]">
             DIRECTIVE
           </div>
-          <div className="text-[#cbd5e1] mb-0.5">Fuel up by 4 PM</div>
-          <div className="text-[10px] text-[#475569]">Evac warning</div>
+          <div className="text-[#cbd5e1] mb-0.5">{actionPlan?.directive?.primary || 'Awaiting intel...'}</div>
+          <div className="text-[10px] text-[#475569]">{actionPlan?.directive?.secondary || '--'}</div>
         </div>
       </div>
     </div>

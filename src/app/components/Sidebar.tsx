@@ -1,10 +1,23 @@
 import Image from 'next/image';
+import { useState } from 'react';
 import AgentRow from './AgentRow';
 import ActivityFeed from './ActivityFeed';
-import type { FeedItem } from '../lib/types';
+import type { NotusState } from '../lib/types';
 
-export default function Sidebar() {
-  const feedItems: FeedItem[] = [];
+interface SidebarProps {
+  agents: NotusState['agents'];
+  feedItems: NotusState['feedItems'];
+  onDeploy: (zip: string) => void;
+}
+
+export default function Sidebar({ agents, feedItems, onDeploy }: SidebarProps) {
+  const [zipCode, setZipCode] = useState('');
+
+  const handleGo = () => {
+    if (zipCode.trim()) {
+      onDeploy(zipCode.trim());
+    }
+  };
 
   return (
     <aside className="w-[280px] min-w-[280px] bg-[#0f0f17] border-r border-[#1a1a2e] flex flex-col h-full">
@@ -30,9 +43,15 @@ export default function Sidebar() {
           <input
             type="text"
             placeholder="Enter ZIP..."
+            value={zipCode}
+            onChange={(e) => setZipCode(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleGo()}
             className="flex-1 bg-[#14141f] border border-[#1e293b] text-[#e2e8f0] px-2.5 py-2 rounded-md text-[13px] outline-none placeholder:text-[#334155]"
           />
-          <button className="bg-[#ff6b35] text-[#0a0a0f] px-3.5 py-2 rounded-md font-bold text-[12px] whitespace-nowrap">
+          <button 
+            onClick={handleGo}
+            className="bg-[#ff6b35] text-[#0a0a0f] px-3.5 py-2 rounded-md font-bold text-[12px] whitespace-nowrap transition-transform active:scale-95"
+          >
             GO
           </button>
         </div>
@@ -42,10 +61,10 @@ export default function Sidebar() {
         <div className="text-[9px] text-[#475569] tracking-[1.2px] font-semibold mb-2">
           AGENTS
         </div>
-        <AgentRow name="recon" status="standby" />
-        <AgentRow name="supply" status="standby" />
-        <AgentRow name="shelter" status="standby" />
-        <AgentRow name="dispatch" status="standby" />
+        <AgentRow name="recon" status={agents.recon.status} />
+        <AgentRow name="supply" status={agents.supply.status} />
+        <AgentRow name="shelter" status={agents.shelter.status} />
+        <AgentRow name="dispatch" status={agents.dispatch.status} />
       </div>
 
       <div className="flex flex-col flex-1 px-4 py-3 overflow-hidden">

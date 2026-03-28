@@ -21,3 +21,11 @@ export interface ActionPlan {
   shelter: { name: string; distance: string; status: string };
   directive: { primary: string; secondary: string };
 }
+
+export interface NotusState {
+  agents: Record<AgentName, { status: AgentStatus; data: unknown }>;
+  feedItems: FeedItem[];
+  actionPlan: ActionPlan | null;
+  mapPins: MapPin[];
+  stormTrack: { lat: number; lng: number }[];
+}
