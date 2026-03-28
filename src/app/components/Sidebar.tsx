@@ -81,7 +81,7 @@ export default function Sidebar({ agents, feedItems, onDeploy }: SidebarProps) {
 
         {activeAgents.length > 0 && (
           <div className="mb-2 px-3 py-2 rounded-lg bg-[#14141f] border border-[#1a1a2e]">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 mb-1.5">
               <div className="flex -space-x-1">
                 {activeAgents.map(name => (
                   <div
@@ -91,12 +91,22 @@ export default function Sidebar({ agents, feedItems, onDeploy }: SidebarProps) {
                   />
                 ))}
               </div>
-              <span className="text-[11px] text-[#94a3b8]">
-                {activeAgents.length === 1
-                  ? `${activeAgents[0]} is working on it`
-                  : 'Agents thinking'}
-                <span className="animate-dots" />
+              <span className="text-[11px] text-[#94a3b8] font-medium">
+                Agents thinking<span className="animate-dots" />
               </span>
+            </div>
+            <div className="flex flex-col gap-0.5 pl-1">
+              {activeAgents.map(name => (
+                <div key={name} className="flex items-center gap-1.5">
+                  <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: agentColors[name] }} />
+                  <span className="text-[10px] capitalize" style={{ color: agentColors[name] }}>
+                    {name}
+                  </span>
+                  <span className="text-[10px] text-[#475569] truncate max-w-[140px]">
+                    {agents[name].thinkingMessage || 'working'}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
         )}

@@ -2,6 +2,8 @@ import { InMemoryRunner, isFinalResponse, stringifyContent } from '@google/adk';
 import { rootAgent } from '../../agents/dispatch';
 import type { MapPin, ActionPlan, StreamChunk } from '../../lib/types';
 
+export const dynamic = 'force-dynamic';
+
 const ZIP_COORDS: Record<string, { lat: number; lng: number; state: string }> = {
   '33620': { lat: 28.0587, lng: -82.4139, state: 'FL' },
   '33601': { lat: 27.9506, lng: -82.4572, state: 'FL' },
@@ -83,326 +85,366 @@ function buildFallbackPlan(
   };
 }
 
+const wait = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
+
 export async function POST(request: Request) {
   const { zip } = await request.json();
   const coords = ZIP_COORDS[zip] || DEFAULT_COORDS;
   const { lat, lng, state: stateCode } = coords;
 
-  const stream = new ReadableStream({
-    async start(controller) {
-      const encoder = new TextEncoder();
-      const send = (chunk: StreamChunk) => {
-        try {
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`),
-          );
-        } catch {}
+  const { readable, writable } = new TransformStream();
+  const writer = writable.getWriter();
+  const encoder = new TextEncoder();
+
+  let writeQueue = Promise.resolve();
+  const send = (chunk: StreamChunk): Promise<void> => {
+    const p = writeQueue.then(async () => {
+      try {
+        await writer.write(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
+      } catch {}
+    });
+    writeQueue = p;
+    return p;
+  };
+
+  (async () => {
+    try {
+      await send({
+        agent: 'dispatch',
+        status: 'active',
+        thinkingMessage: 'Deploying agents',
+        feed: `Got it — looking into conditions near ${zip} now.`,
+      });
+      await send({
+        agent: 'recon',
+        status: 'active',
+        thinkingMessage: 'Querying NWS alerts',
+        feed: 'Pulling the latest weather data from NWS.',
+      });
+
+      const runner = new InMemoryRunner({ agent: rootAgent, appName: 'notus' });
+      const session = await runner.sessionService.createSession({
+        appName: 'notus',
+        userId: 'notus-user',
+      });
+
+      const userMessage = {
+        role: 'user' as const,
+        parts: [{
+          text: `Analyze hurricane preparedness for coordinates ${lat}, ${lng} in state ${stateCode}. The user is at zip code ${zip}.`,
+        }],
       };
 
-      try {
-        send({
-          agent: 'dispatch',
-          status: 'active',
-          thinkingMessage: 'Deploying agents',
-          feed: `Got it — looking into conditions near ${zip} now.`,
-        });
+      let adkDone = false;
+      let reconDone = false;
+      let supplyStarted = false;
+      let shelterStarted = false;
+      let finalText = '';
+      const supplyPins: MapPin[] = [];
+      const shelterPins: MapPin[] = [];
 
-        send({
-          agent: 'recon',
-          status: 'active',
-          thinkingMessage: 'Checking weather alerts',
-          feed: 'Pulling the latest weather data from NWS.',
-        });
+      const reconMsgs = [
+        'Querying NWS alerts',
+        'Reading storm data',
+        'Analyzing wind patterns',
+        'Assessing threat level',
+        'Checking forecast models',
+        'Scanning coastal advisories',
+        'Evaluating storm surge risk',
+      ];
+      const supplyMsgs = [
+        'Scanning nearby stations',
+        'Checking fuel availability',
+        'Mapping supply routes',
+        'Verifying open status',
+      ];
+      const shelterMsgs = [
+        'Locating emergency shelters',
+        'Verifying capacity',
+        'Checking access routes',
+        'Confirming availability',
+      ];
+      let beatIdx = 0;
 
-        const runner = new InMemoryRunner({
-          agent: rootAgent,
-          appName: 'notus',
-        });
-        const session = await runner.sessionService.createSession({
-          appName: 'notus',
-          userId: 'notus-user',
-        });
-
-        const userMessage = {
-          role: 'user' as const,
-          parts: [
-            {
-              text: `Analyze hurricane preparedness for coordinates ${lat}, ${lng} in state ${stateCode}. The user is at zip code ${zip}.`,
-            },
-          ],
-        };
-
-        let reconDone = false;
-        let supplyStarted = false;
-        let shelterStarted = false;
-        let finalText = '';
-        const supplyPins: MapPin[] = [];
-        const shelterPins: MapPin[] = [];
-
-        const reconThinking = [
-          'Checking weather alerts',
-          'Reading storm data',
-          'Analyzing conditions',
-          'Rating the threat',
-        ];
-        let reconIdx = 0;
-
-        for await (const event of runner.runAsync({
-          userId: 'notus-user',
-          sessionId: session.id,
-          newMessage: userMessage,
-        })) {
-          const ev = event as unknown as Record<string, unknown>;
-          const author = (ev.author as string) || '';
-          const agentName = mapAuthor(author);
-          const content = stringifyContent(event);
-
-          if (agentName === 'recon') {
-            reconIdx = (reconIdx + 1) % reconThinking.length;
-            send({
+      const heartbeat = (async () => {
+        while (!adkDone) {
+          for (let i = 0; i < 18 && !adkDone; i++) await wait(100);
+          if (adkDone) break;
+          beatIdx++;
+          if (!reconDone) {
+            await send({
               agent: 'recon',
-              thinkingMessage: reconThinking[reconIdx],
+              thinkingMessage: reconMsgs[beatIdx % reconMsgs.length],
             });
+          }
+          if (supplyStarted) {
+            await send({
+              agent: 'supply',
+              thinkingMessage: supplyMsgs[beatIdx % supplyMsgs.length],
+            });
+          }
+          if (shelterStarted) {
+            await send({
+              agent: 'shelter',
+              thinkingMessage: shelterMsgs[beatIdx % shelterMsgs.length],
+            });
+          }
+        }
+      })();
+
+      for await (const event of runner.runAsync({
+        userId: 'notus-user',
+        sessionId: session.id,
+        newMessage: userMessage,
+      })) {
+        const ev = event as unknown as Record<string, unknown>;
+        const author = (ev.author as string) || '';
+        const agentName = mapAuthor(author);
+        const content = stringifyContent(event);
+
+        if (agentName === 'recon') {
+          if (content && content.length > 15 && !looksLikeJson(content)) {
+            await send({ agent: 'recon', feed: content.slice(0, 250) });
+          }
+        }
+
+        if (agentName === 'supply') {
+          if (!supplyStarted) {
+            supplyStarted = true;
+            if (!reconDone) {
+              reconDone = true;
+              await send({ agent: 'recon', status: 'done' });
+              await send({
+                agent: 'dispatch',
+                thinkingMessage: 'Coordinating supply + shelter',
+              });
+            }
+            await send({
+              agent: 'supply',
+              status: 'active',
+              thinkingMessage: 'Finding gas stations',
+              feed: 'Searching for open gas stations nearby.',
+            });
+          } else {
             if (content && content.length > 15 && !looksLikeJson(content)) {
-              send({ agent: 'recon', feed: content.slice(0, 250) });
+              await send({ agent: 'supply', feed: content.slice(0, 250) });
             }
-          }
-
-          if (agentName === 'supply') {
-            if (!supplyStarted) {
-              supplyStarted = true;
-              if (!reconDone) {
-                reconDone = true;
-                send({ agent: 'recon', status: 'done' });
-                send({
-                  agent: 'dispatch',
-                  thinkingMessage: 'Coordinating supply + shelter',
-                });
-              }
-              send({
-                agent: 'supply',
-                status: 'active',
-                thinkingMessage: 'Finding gas stations',
-                feed: 'Searching for open gas stations nearby.',
-              });
-            } else {
-              send({ agent: 'supply', thinkingMessage: 'Checking availability' });
-              if (content && content.length > 15 && !looksLikeJson(content)) {
-                send({ agent: 'supply', feed: content.slice(0, 250) });
-              }
-            }
-          }
-
-          if (agentName === 'shelter') {
-            if (!shelterStarted) {
-              shelterStarted = true;
-              if (!reconDone) {
-                reconDone = true;
-                send({ agent: 'recon', status: 'done' });
-              }
-              send({
-                agent: 'shelter',
-                status: 'active',
-                thinkingMessage: 'Finding shelters',
-                feed: 'Searching for emergency shelters nearby.',
-              });
-            } else {
-              send({ agent: 'shelter', thinkingMessage: 'Checking capacity' });
-              if (content && content.length > 15 && !looksLikeJson(content)) {
-                send({ agent: 'shelter', feed: content.slice(0, 250) });
-              }
-            }
-          }
-
-          try {
-            const contentObj = ev.content as Record<string, unknown> | undefined;
-            const parts = (contentObj?.parts as Array<Record<string, unknown>>) || [];
-            for (const part of parts) {
-              const funcResp = part.functionResponse as
-                | { response: Record<string, unknown> }
-                | undefined;
-              const resp = funcResp?.response;
-              if (!resp) continue;
-
-              if (Array.isArray(resp.places)) {
-                for (const p of resp.places as Array<Record<string, unknown>>) {
-                  if (typeof p.lat === 'number' && typeof p.lng === 'number') {
-                    const pin: MapPin = {
-                      lat: p.lat,
-                      lng: p.lng,
-                      type: 'supply',
-                      label: (p.name as string) || 'Gas Station',
-                    };
-                    supplyPins.push(pin);
-                    send({
-                      agent: 'supply',
-                      pin,
-                      thinkingMessage: `Found ${pin.label}`,
-                      feed: `${pin.label} — ${(p.isOpen as boolean) ? 'OPEN' : 'status unknown'}`,
-                    });
-                  }
-                }
-              }
-
-              if (Array.isArray(resp.shelters)) {
-                for (const s of resp.shelters as Array<Record<string, unknown>>) {
-                  if (typeof s.lat === 'number' && typeof s.lng === 'number') {
-                    const pin: MapPin = {
-                      lat: s.lat,
-                      lng: s.lng,
-                      type: 'shelter',
-                      label: (s.name as string) || 'Shelter',
-                    };
-                    shelterPins.push(pin);
-                    send({
-                      agent: 'shelter',
-                      pin,
-                      thinkingMessage: `Found ${pin.label}`,
-                      feed: `${pin.label} — potential shelter`,
-                    });
-                  }
-                }
-              }
-            }
-          } catch {}
-
-          if (isFinalResponse(event) && content) {
-            finalText = content;
           }
         }
 
-        if (!reconDone) send({ agent: 'recon', status: 'done' });
-        if (supplyStarted) {
-          send({
-            agent: 'supply',
-            status: 'done',
-            feed:
-              supplyPins.length > 0
-                ? `Found ${supplyPins.length} supply location${supplyPins.length > 1 ? 's' : ''}.`
-                : 'No supply data available from API.',
-          });
-        } else {
-          send({ agent: 'supply', status: 'done' });
-        }
-        if (shelterStarted) {
-          send({
-            agent: 'shelter',
-            status: 'done',
-            feed:
-              shelterPins.length > 0
-                ? `Found ${shelterPins.length} potential shelter${shelterPins.length > 1 ? 's' : ''}.`
-                : 'No shelter data available from API.',
-          });
-        } else {
-          send({ agent: 'shelter', status: 'done' });
+        if (agentName === 'shelter') {
+          if (!shelterStarted) {
+            shelterStarted = true;
+            if (!reconDone) {
+              reconDone = true;
+              await send({ agent: 'recon', status: 'done' });
+            }
+            await send({
+              agent: 'shelter',
+              status: 'active',
+              thinkingMessage: 'Finding shelters',
+              feed: 'Searching for emergency shelters nearby.',
+            });
+          } else {
+            if (content && content.length > 15 && !looksLikeJson(content)) {
+              await send({ agent: 'shelter', feed: content.slice(0, 250) });
+            }
+          }
         }
 
-        send({
-          agent: 'dispatch',
-          pin: { lat, lng, type: 'user', label: 'You' },
-        });
-
-        let actionPlan: ActionPlan;
-        let parsed: Record<string, unknown> | null = null;
         try {
-          const fenced = finalText.match(/```(?:json)?\s*([\s\S]*?)```/);
-          const jsonStr = fenced ? fenced[1] : finalText;
-          const objMatch = jsonStr.match(/\{[\s\S]*\}/);
-          if (objMatch) parsed = JSON.parse(objMatch[0]);
-        } catch {
-          parsed = null;
-        }
+          const contentObj = ev.content as Record<string, unknown> | undefined;
+          const parts = (contentObj?.parts as Array<Record<string, unknown>>) || [];
+          for (const part of parts) {
+            const funcResp = part.functionResponse as
+              | { response: Record<string, unknown> }
+              | undefined;
+            const resp = funcResp?.response;
+            if (!resp) continue;
 
-        if (parsed) {
-          const threat = (parsed.threat as Record<string, string>) || {};
-          const fuel = (parsed.fuel as Record<string, string>) || {};
-          const shelter = (parsed.shelter as Record<string, string>) || {};
-          const directive = (parsed.directive as Record<string, string>) || {};
-          actionPlan = {
-            threat: {
-              level: threat.level || 'Unknown',
-              detail: threat.detail || '',
-            },
-            fuel: {
-              name:
-                fuel.name || supplyPins[0]?.label || 'Not found',
-              distance: fuel.distance || '--',
-              status: fuel.status || 'Unknown',
-            },
-            shelter: {
-              name:
-                shelter.name || shelterPins[0]?.label || 'Not found',
-              distance: shelter.distance || '--',
-              status: shelter.status || 'Unknown',
-            },
-            directive: {
-              primary: directive.primary || 'Stay alert',
-              secondary: directive.secondary || 'Monitor local news',
-            },
-          };
-
-          if (supplyPins.length === 0 && Array.isArray(parsed.supplyPins)) {
-            for (const p of parsed.supplyPins as Array<Record<string, unknown>>) {
-              if (typeof p.lat === 'number' && typeof p.lng === 'number') {
-                send({
-                  agent: 'supply',
-                  pin: {
+            if (Array.isArray(resp.places)) {
+              for (const p of resp.places as Array<Record<string, unknown>>) {
+                if (typeof p.lat === 'number' && typeof p.lng === 'number') {
+                  const pin: MapPin = {
                     lat: p.lat,
                     lng: p.lng,
                     type: 'supply',
-                    label: (p.label as string) || 'Supply',
-                  },
-                });
+                    label: (p.name as string) || 'Gas Station',
+                  };
+                  supplyPins.push(pin);
+                  await send({
+                    agent: 'supply',
+                    pin,
+                    thinkingMessage: `Found ${pin.label}`,
+                    feed: `${pin.label} — ${(p.isOpen as boolean) ? 'OPEN' : 'status unknown'}`,
+                  });
+                }
               }
             }
-          }
-          if (shelterPins.length === 0 && Array.isArray(parsed.shelterPins)) {
-            for (const p of parsed.shelterPins as Array<Record<string, unknown>>) {
-              if (typeof p.lat === 'number' && typeof p.lng === 'number') {
-                send({
-                  agent: 'shelter',
-                  pin: {
-                    lat: p.lat,
-                    lng: p.lng,
+
+            if (Array.isArray(resp.shelters)) {
+              for (const s of resp.shelters as Array<Record<string, unknown>>) {
+                if (typeof s.lat === 'number' && typeof s.lng === 'number') {
+                  const pin: MapPin = {
+                    lat: s.lat,
+                    lng: s.lng,
                     type: 'shelter',
-                    label: (p.label as string) || 'Shelter',
-                  },
-                });
+                    label: (s.name as string) || 'Shelter',
+                  };
+                  shelterPins.push(pin);
+                  await send({
+                    agent: 'shelter',
+                    pin,
+                    thinkingMessage: `Found ${pin.label}`,
+                    feed: `${pin.label} — potential shelter`,
+                  });
+                }
               }
             }
           }
-        } else {
-          actionPlan = buildFallbackPlan(finalText, supplyPins, shelterPins);
+        } catch {}
+
+        if (isFinalResponse(event) && content) {
+          finalText = content;
         }
-
-        send({
-          agent: 'dispatch',
-          status: 'done',
-          feed: 'Your action plan is ready. Stay safe out there. 🌀',
-          actionPlan,
-        });
-
-        controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-      } catch (err) {
-        console.error('Agent route error:', err);
-        const encoder = new TextEncoder();
-        send({
-          agent: 'dispatch',
-          status: 'done',
-          feed: `Agent error: ${String(err).slice(0, 200)}`,
-        });
-        controller.enqueue(encoder.encode('data: [DONE]\n\n'));
       }
 
-      controller.close();
-    },
-  });
+      adkDone = true;
+      await heartbeat;
 
-  return new Response(stream, {
+      if (!reconDone) {
+        await send({ agent: 'recon', status: 'done' });
+        await wait(300);
+      }
+
+      await send({
+        agent: 'supply',
+        status: 'done',
+        feed: supplyStarted
+          ? supplyPins.length > 0
+            ? `Found ${supplyPins.length} supply location${supplyPins.length > 1 ? 's' : ''}.`
+            : 'No supply data available from API.'
+          : undefined,
+      });
+      await wait(300);
+
+      await send({
+        agent: 'shelter',
+        status: 'done',
+        feed: shelterStarted
+          ? shelterPins.length > 0
+            ? `Found ${shelterPins.length} potential shelter${shelterPins.length > 1 ? 's' : ''}.`
+            : 'No shelter data available from API.'
+          : undefined,
+      });
+      await wait(300);
+
+      await send({
+        agent: 'dispatch',
+        pin: { lat, lng, type: 'user', label: 'You' },
+      });
+      await wait(200);
+
+      let actionPlan: ActionPlan;
+      let parsed: Record<string, unknown> | null = null;
+      try {
+        const fenced = finalText.match(/```(?:json)?\s*([\s\S]*?)```/);
+        const jsonStr = fenced ? fenced[1] : finalText;
+        const objMatch = jsonStr.match(/\{[\s\S]*\}/);
+        if (objMatch) parsed = JSON.parse(objMatch[0]);
+      } catch {
+        parsed = null;
+      }
+
+      if (parsed) {
+        const threat = (parsed.threat as Record<string, string>) || {};
+        const fuel = (parsed.fuel as Record<string, string>) || {};
+        const shelter = (parsed.shelter as Record<string, string>) || {};
+        const directive = (parsed.directive as Record<string, string>) || {};
+        actionPlan = {
+          threat: {
+            level: threat.level || 'Unknown',
+            detail: threat.detail || '',
+          },
+          fuel: {
+            name: fuel.name || supplyPins[0]?.label || 'Not found',
+            distance: fuel.distance || '--',
+            status: fuel.status || 'Unknown',
+          },
+          shelter: {
+            name: shelter.name || shelterPins[0]?.label || 'Not found',
+            distance: shelter.distance || '--',
+            status: shelter.status || 'Unknown',
+          },
+          directive: {
+            primary: directive.primary || 'Stay alert',
+            secondary: directive.secondary || 'Monitor local news',
+          },
+        };
+
+        if (supplyPins.length === 0 && Array.isArray(parsed.supplyPins)) {
+          for (const p of parsed.supplyPins as Array<Record<string, unknown>>) {
+            if (typeof p.lat === 'number' && typeof p.lng === 'number') {
+              await send({
+                agent: 'supply',
+                pin: {
+                  lat: p.lat,
+                  lng: p.lng,
+                  type: 'supply',
+                  label: (p.label as string) || 'Supply',
+                },
+              });
+            }
+          }
+        }
+        if (shelterPins.length === 0 && Array.isArray(parsed.shelterPins)) {
+          for (const p of parsed.shelterPins as Array<Record<string, unknown>>) {
+            if (typeof p.lat === 'number' && typeof p.lng === 'number') {
+              await send({
+                agent: 'shelter',
+                pin: {
+                  lat: p.lat,
+                  lng: p.lng,
+                  type: 'shelter',
+                  label: (p.label as string) || 'Shelter',
+                },
+              });
+            }
+          }
+        }
+      } else {
+        actionPlan = buildFallbackPlan(finalText, supplyPins, shelterPins);
+      }
+
+      await send({
+        agent: 'dispatch',
+        status: 'done',
+        feed: 'Your action plan is ready. Stay safe out there. 🌀',
+        actionPlan,
+      });
+
+      await writeQueue;
+      await writer.write(encoder.encode('data: [DONE]\n\n'));
+    } catch (err) {
+      console.error('Agent route error:', err);
+      await send({
+        agent: 'dispatch',
+        status: 'done',
+        feed: `Agent error: ${String(err).slice(0, 200)}`,
+      });
+      await writeQueue;
+      await writer.write(encoder.encode('data: [DONE]\n\n'));
+    } finally {
+      await writer.close();
+    }
+  })();
+
+  return new Response(readable, {
     headers: {
       'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
+      'Cache-Control': 'no-cache, no-transform',
       Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
     },
   });
 }
