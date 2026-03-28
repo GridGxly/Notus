@@ -1,7 +1,8 @@
 'use client';
 
 import Image from 'next/image';
-import { useState, useRef } from 'react';
+import Script from 'next/script';
+import { useState, useEffect } from 'react';
 import AgentRow from './AgentRow';
 import ActivityFeed from './ActivityFeed';
 import type { AgentName, NotusState } from '../lib/types';
@@ -13,20 +14,6 @@ const AGENT_COLORS: Record<AgentName, string> = {
   dispatch: '#ff6b35',
 };
 
-interface SpeechRecognitionEvent {
-  results: { [key: number]: { [key: number]: { transcript: string } } };
-}
-
-interface SpeechRecognitionInstance {
-  lang: string;
-  interimResults: boolean;
-  maxAlternatives: number;
-  onresult: ((e: SpeechRecognitionEvent) => void) | null;
-  onerror: (() => void) | null;
-  onend: (() => void) | null;
-  start: () => void;
-  stop: () => void;
-}
 
 interface SidebarProps {
   agents: NotusState['agents'];
@@ -39,9 +26,6 @@ interface SidebarProps {
 export default function Sidebar({ agents, feedItems, onDeploy, onFollowUp, showFollowUp }: SidebarProps) {
   const [zipCode, setZipCode] = useState('');
   const [followUpText, setFollowUpText] = useState('');
-  const [voiceState, setVoiceState] = useState<'idle' | 'listening' | 'processing'>('idle');
-  const [voiceTranscript, setVoiceTranscript] = useState('');
-  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
 
   const handleGo = () => {
     if (zipCode.trim()) onDeploy(zipCode.trim());
@@ -54,66 +38,23 @@ export default function Sidebar({ agents, feedItems, onDeploy, onFollowUp, showF
     }
   };
 
-  const handleVoiceInput = async () => {
-    if (voiceState === 'listening') {
-      recognitionRef.current?.stop();
-      return;
-    }
-
-    const SpeechRecognition = (window as unknown as Record<string, unknown>).SpeechRecognition || (window as unknown as Record<string, unknown>).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      alert('Speech recognition is not supported in this browser. Please use Chrome.');
-      return;
-    }
-
-    setVoiceState('listening');
-    setVoiceTranscript('');
-
-    const recognition = new (SpeechRecognition as new () => SpeechRecognitionInstance)();
-    recognitionRef.current = recognition;
-    recognition.lang = 'en-US';
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
-
-    recognition.onresult = async (e: SpeechRecognitionEvent) => {
-      const transcript = e.results[0][0].transcript;
-      setVoiceTranscript(transcript);
-      setVoiceState('processing');
-
-      try {
-        const res = await fetch('/api/voice/transcribe', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ transcript }),
-        });
-
-        if (res.ok) {
-          const { zip } = await res.json();
-          if (zip) {
-            setZipCode(zip);
-            setVoiceTranscript('');
-            onDeploy(zip);
-          } else {
-            setVoiceTranscript('Could not find a location. Try again.');
-          }
+  useEffect(() => {
+    const handleToolCall = (e: Event) => {
+      const toolEvent = e as CustomEvent;
+      if (toolEvent.detail.toolName === 'deploy_notus_dashboard') {
+        const zip = toolEvent.detail.parameters.zip_code;
+        if (zip) {
+          setZipCode(zip);
+          onDeploy(zip);
+          toolEvent.detail.setResult('Notus dashboard scanning initiated for zip code ' + zip);
+        } else {
+          toolEvent.detail.setResult('Error: No zip code provided.');
         }
-      } catch {
-        setVoiceTranscript('Error processing voice. Try again.');
       }
-      setVoiceState('idle');
     };
-
-    recognition.onerror = () => {
-      setVoiceState('idle');
-      setVoiceTranscript('');
-    };
-
-    recognition.onend = () => {
-      setVoiceState((prev) => (prev === 'listening' ? 'idle' : prev));
-    };
-
-    recognition.start();
-  };
+    window.addEventListener('elevenlabs-client-tool-call', handleToolCall);
+    return () => window.removeEventListener('elevenlabs-client-tool-call', handleToolCall);
+  }, [onDeploy]);
 
   const activeAgents = (Object.keys(agents) as AgentName[]).filter(
     name => agents[name].status === 'active'
@@ -122,6 +63,9 @@ export default function Sidebar({ agents, feedItems, onDeploy, onFollowUp, showF
   const anyActive = activeAgents.length > 0;
 
   return (
+    <>
+    <Script src="https://elevenlabs.io/convai-widget/index.js" strategy="afterInteractive" />
+    <elevenlabs-convai agent-id={process.env.NEXT_PUBLIC_ELEVENLABS_AGENT_ID}></elevenlabs-convai>
     <aside className="w-full md:w-[340px] md:min-w-[340px] bg-black border-r border-white/5 flex flex-col h-full text-[#e5e5e5]">
       <div className="p-5 pb-4 border-b border-white/5">
         <div className="flex flex-row items-center">
@@ -148,42 +92,12 @@ export default function Sidebar({ agents, feedItems, onDeploy, onFollowUp, showF
             className="flex-1 bg-[#14141f] border border-[#1e293b] text-[#e2e8f0] px-2.5 py-2 rounded-md text-[13px] outline-none placeholder:text-[#334155]"
           />
           <button
-            onClick={handleVoiceInput}
-            className={`px-2.5 py-2 rounded-md transition-all ${
-              voiceState === 'listening'
-                ? 'bg-red-500/20 text-red-400 animate-mic-pulse'
-                : voiceState === 'processing'
-                  ? 'bg-[#ff6b35]/10 text-[#ff6b35]/50'
-                  : 'bg-[#14141f] border border-[#1e293b] text-[#475569] hover:text-[#e2e8f0] hover:border-[#334155]'
-            }`}
-            title={voiceState === 'listening' ? 'Stop recording' : 'Say your location'}
-          >
-            {voiceState === 'processing' ? (
-              <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" opacity="0.3" />
-                <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-            ) : (
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                <line x1="12" x2="12" y1="19" y2="22" />
-              </svg>
-            )}
-          </button>
-          <button
             onClick={handleGo}
             className="bg-[#ff6b35] text-[#0a0a0f] px-3.5 py-2 rounded-md font-bold text-[12px] whitespace-nowrap transition-transform active:scale-95"
           >
             GO
           </button>
         </div>
-
-        {voiceTranscript && (
-          <div className="mt-2 text-[11px] text-[#64748b] italic truncate">
-            &quot;{voiceTranscript}&quot;
-          </div>
-        )}
       </div>
 
       <div className="px-4 py-3 border-b border-[#1a1a2e]">
@@ -247,5 +161,6 @@ export default function Sidebar({ agents, feedItems, onDeploy, onFollowUp, showF
         </div>
       )}
     </aside>
+    </>
   );
 }

@@ -15,9 +15,10 @@ YOUR WORKFLOW:
 1) Open with 2-3 SHORT sentences addressing Recon. Set the context — mention the zip, the area, what you're worried about. Keep it tight, like radio comms.
 2) Call your sub-agents: recon_agent, supply_agent, shelter_agent.
 3) After they report back, write 2-3 SHORT sentences synthesizing what you heard. Reference specific things each agent found by name. "Recon says X, Supply found Y, Shelter locked in Z."
-4) Output ONE JSON object (nothing after it): { "threat": { "level": "X/5", "detail": "one sentence" }, "fuel": { "name": "Station Name", "distance": "X.Xmi", "status": "OPEN/CLOSED" }, "shelter": { "name": "Shelter Name", "distance": "X.Xmi", "status": "status" }, "directive": { "primary": "Main action", "secondary": "Backup" }, "supplyPins": [{ "lat": number, "lng": number, "label": "name" }], "shelterPins": [{ "lat": number, "lng": number, "label": "name" }] }
+4) Output ONE JSON object ONLY containing all of your findings and your conversational sentences. Do NOT include Markdown formatting or text outside the JSON.
 
-CRITICAL: Each conversational message must be 2-3 sentences MAX. Be concise. The user reads these in a small sidebar.`,
+CRITICAL: Your final output must strictly follow this JSON schema, but the 'detail' and 'directive' text values inside it should reflect your 2-3 sentence conversational radio comms:
+{ "threat": { "level": "X/5", "detail": "Conversational report here" }, "fuel": { "name": "Station Name", "distance": "X.Xmi", "status": "OPEN/CLOSED" }, "shelter": { "name": "Shelter Name", "distance": "X.Xmi", "status": "status" }, "directive": { "primary": "Main action", "secondary": "Backup" }, "supplyPins": [{ "lat": number, "lng": number, "label": "name" }], "shelterPins": [{ "lat": number, "lng": number, "label": "name" }] }`,
   subAgents: [reconAgent, supplyAgent, shelterAgent],
 });
 
