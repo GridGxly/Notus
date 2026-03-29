@@ -246,13 +246,22 @@ async function handleInitial(zip: string, directCoords?: { lat: number; lng: num
       await send({
         agent: 'dispatch',
         status: 'active',
-        thinkingMessage: 'Deploying agents',
+        thinkingMessage: 'Initializing operations center',
         mapView: { lat, lng, zoom: 11 },
       });
+      await wait(800);
+
+      await send({
+        agent: 'dispatch',
+        thinkingMessage: 'Deploying field agents',
+        feed: `Dispatch online. Deploying agents to analyze ${zip === 'GPS' ? 'your location' : `ZIP ${zip}`}.`,
+      });
+      await wait(600);
+
       await send({
         agent: 'recon',
         status: 'active',
-        thinkingMessage: 'Checking for storm warnings',
+        thinkingMessage: 'Connecting to NWS satellite feeds',
       });
 
       const runner = new InMemoryRunner({ agent: rootAgent, appName: 'notus' });
@@ -291,43 +300,59 @@ async function handleInitial(zip: string, directCoords?: { lat: number; lng: num
       const shelterPins: MapPin[] = [];
 
       const reconMsgs = [
-        'Pulling NWS satellite feeds',
-        'Analyzing wind corridors',
+        'Connecting to NWS satellite feeds',
+        'Downloading radar composites',
+        'Analyzing wind shear patterns',
         'Reading storm surge models',
-        'Cross-referencing forecast data',
-        'Checking coastal flood zones',
+        'Scanning Gulf basin for tropical activity',
+        'Cross-referencing historical storm tracks',
+        'Checking coastal flood zone maps',
         'Mapping precipitation bands',
-        'Evaluating historical patterns',
-        'Assessing 24hr trajectory',
+        'Evaluating barometric pressure trends',
+        'Assessing 24-48hr trajectory models',
+        'Pulling upper-level wind analysis',
+        'Checking sea surface temperatures',
+        'Reviewing frontal boundary positions',
+        'Analyzing moisture convergence zones',
       ];
       const supplyMsgs = [
         'Scanning fuel grid for open stations',
-        'Checking highway access routes',
+        'Querying Google Places API',
+        'Checking real-time station availability',
+        'Mapping highway access routes',
         'Evaluating flood-safe corridors',
-        'Verifying station capacity',
-        'Mapping backup supply points',
+        'Verifying station operating hours',
+        'Comparing fuel point distances',
+        'Assessing backup supply locations',
+        'Checking road conditions near stations',
+        'Cross-referencing with evacuation routes',
       ];
       const shelterMsgs = [
         'Surveying concrete structures nearby',
+        'Querying community centers and schools',
         'Checking building wind ratings',
-        'Evaluating shelter accessibility',
+        'Evaluating structural integrity data',
+        'Mapping accessibility and parking',
         'Cross-referencing with supply routes',
-        'Verifying capacity and status',
+        'Checking proximity to flood zones',
+        'Verifying building capacity estimates',
+        'Assessing backup shelter options',
+        'Reviewing Florida building code compliance',
       ];
       let beatIdx = 0;
 
       const heartbeat = (async () => {
         const start = Date.now();
         while (!adkDone) {
-          for (let i = 0; i < 18 && !adkDone; i++) await wait(100);
+          for (let i = 0; i < 25 && !adkDone; i++) await wait(100);
           if (adkDone) break;
           beatIdx++;
-          
+
           const elapsed = (Date.now() - start) / 1000;
           const offsetLat = lat + Math.sin(elapsed * 0.35) * 0.08 + Math.sin(elapsed * 0.7) * 0.02;
           const offsetLng = lng + Math.cos(elapsed * 0.25) * 0.08 + Math.cos(elapsed * 0.55) * 0.03;
           const zoomDrift = 11.5 + Math.sin(elapsed * 0.18) * 1.0;
-          
+
           await send({
             agent: 'dispatch',
             mapView: { lat: offsetLat, lng: offsetLng, zoom: Math.round(zoomDrift * 10) / 10 },
@@ -375,16 +400,19 @@ async function handleInitial(zip: string, directCoords?: { lat: number; lng: num
             supplyStarted = true;
             if (!reconDone) {
               reconDone = true;
-              await send({ agent: 'recon', status: 'done' });
+              await send({ agent: 'recon', status: 'done', feed: 'Weather assessment transmitted to team.' });
+              await wait(500);
               await send({
                 agent: 'dispatch',
                 thinkingMessage: 'Coordinating supply + shelter search',
+                feed: 'Recon data received. Deploying Supply and Shelter agents.',
               });
+              await wait(400);
             }
             await send({
               agent: 'supply',
               status: 'active',
-              thinkingMessage: 'Finding open gas stations',
+              thinkingMessage: 'Scanning fuel grid for open stations',
               mapView: { lat, lng, zoom: 13 },
             });
           }
@@ -399,11 +427,12 @@ async function handleInitial(zip: string, directCoords?: { lat: number; lng: num
             if (!reconDone) {
               reconDone = true;
               await send({ agent: 'recon', status: 'done' });
+              await wait(400);
             }
             await send({
               agent: 'shelter',
               status: 'active',
-              thinkingMessage: 'Finding safe places nearby',
+              thinkingMessage: 'Surveying concrete structures nearby',
             });
           }
           if (content && content.length > 5 && !looksLikeJson(content)) {
@@ -424,46 +453,68 @@ async function handleInitial(zip: string, directCoords?: { lat: number; lng: num
       await heartbeat;
 
       if (!reconDone) {
-        await send({ agent: 'recon', status: 'done' });
-        await wait(300);
+        await send({ agent: 'recon', status: 'done', feed: 'Weather assessment complete.' });
+        await wait(800);
+      }
+
+      if (supplyStarted) {
+        await send({ agent: 'supply', thinkingMessage: 'Finalizing supply report' });
+        await wait(1000);
+        await send({ agent: 'supply', status: 'done', feed: 'Supply sweep complete. Report filed.' });
+        await wait(600);
+      } else {
+        await send({ agent: 'supply', status: 'done' });
+        await wait(400);
+      }
+
+      if (shelterStarted) {
+        await send({ agent: 'shelter', thinkingMessage: 'Locking in shelter recommendations' });
+        await wait(1000);
+        await send({ agent: 'shelter', status: 'done', feed: 'Shelter options mapped. Standing by.' });
+        await wait(600);
+      } else {
+        await send({ agent: 'shelter', status: 'done' });
+        await wait(400);
       }
 
       await send({
-        agent: 'supply',
-        status: 'done',
+        agent: 'dispatch',
+        thinkingMessage: 'All agents reported in',
+        feed: 'All field agents have checked in. Beginning synthesis.',
       });
-      await wait(300);
-
-      await send({
-        agent: 'shelter',
-        status: 'done',
-      });
-      await wait(300);
+      await wait(1200);
 
       await send({
         agent: 'dispatch',
-        thinkingMessage: 'Synthesizing team intel',
+        thinkingMessage: 'Correlating weather and ground intel',
       });
-      await wait(600);
+      await wait(1000);
 
       await send({
         agent: 'dispatch',
-        thinkingMessage: 'Compiling action plan',
+        thinkingMessage: 'Running threat assessment matrix',
       });
-      await wait(400);
+      await wait(800);
 
       await send({
         agent: 'dispatch',
         pin: { lat, lng, type: 'user', label: 'You' },
         mapView: { lat, lng, zoom: 13 },
       });
-      await wait(600);
+      await wait(800);
 
       await send({
         agent: 'dispatch',
+        thinkingMessage: 'Compiling action plan',
+      });
+      await wait(1000);
+
+      await send({
+        agent: 'dispatch',
+        thinkingMessage: 'Finalizing directives',
         mapView: { lat, lng, zoom: 14 },
       });
-      await wait(300);
+      await wait(600);
 
       let actionPlan: ActionPlan;
       let parsed: Record<string, unknown> | null = null;
@@ -574,15 +625,20 @@ async function handleFollowUp(storedSessionId: string, question: string) {
       let adkDone = false;
       const followUpMsgs = [
         'Thinking about your question',
-        'Checking what I found earlier',
-        'Looking into it',
+        'Reviewing previous intel',
+        'Cross-referencing agent reports',
+        'Checking what Recon found',
+        'Reviewing Supply data',
+        'Checking Shelter options',
+        'Consulting weather models',
         'Putting an answer together',
+        'Drafting response',
       ];
       let beatIdx = 0;
 
       const heartbeat = (async () => {
         while (!adkDone) {
-          for (let i = 0; i < 18 && !adkDone; i++) await wait(100);
+          for (let i = 0; i < 25 && !adkDone; i++) await wait(100);
           if (adkDone) break;
           beatIdx++;
           await send({
