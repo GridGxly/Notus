@@ -54,6 +54,7 @@ export default function Sidebar({
         boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
       }}
     >
+      <div className="flex-1 min-h-0 overflow-y-auto">
       <div className="p-5 pb-4">
         <div className="flex items-center">
           <Image
@@ -175,8 +176,9 @@ export default function Sidebar({
         />
       </div>
 
-      <div className="flex-1 overflow-hidden px-4 pt-3">
+      <div className="px-4 pt-3 pb-4">
         <ActivityFeed items={feedItems} />
+      </div>
       </div>
 
       {showFollowUp && !anyActive && (
