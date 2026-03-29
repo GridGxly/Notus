@@ -246,22 +246,22 @@ async function handleInitial(zip: string, directCoords?: { lat: number; lng: num
       await send({
         agent: 'dispatch',
         status: 'active',
-        thinkingMessage: 'Initializing operations center',
+        thinkingMessage: 'Starting up',
         mapView: { lat, lng, zoom: 11 },
       });
       await wait(800);
 
       await send({
         agent: 'dispatch',
-        thinkingMessage: 'Deploying field agents',
-        feed: `Dispatch online. Deploying agents to analyze ${zip === 'GPS' ? 'your location' : `ZIP ${zip}`}.`,
+        thinkingMessage: 'Sending out agents',
+        feed: `Dispatch is online. Sending agents to check on ${zip === 'GPS' ? 'your area' : `ZIP ${zip}`}.`,
       });
       await wait(600);
 
       await send({
         agent: 'recon',
         status: 'active',
-        thinkingMessage: 'Connecting to NWS satellite feeds',
+        thinkingMessage: 'Pulling up weather data',
       });
 
       const runner = new InMemoryRunner({ agent: rootAgent, appName: 'notus' });
@@ -300,44 +300,44 @@ async function handleInitial(zip: string, directCoords?: { lat: number; lng: num
       const shelterPins: MapPin[] = [];
 
       const reconMsgs = [
-        'Connecting to NWS satellite feeds',
-        'Downloading radar composites',
-        'Analyzing wind shear patterns',
-        'Reading storm surge models',
-        'Scanning Gulf basin for tropical activity',
-        'Cross-referencing historical storm tracks',
-        'Checking coastal flood zone maps',
-        'Mapping precipitation bands',
-        'Evaluating barometric pressure trends',
-        'Assessing 24-48hr trajectory models',
-        'Pulling upper-level wind analysis',
-        'Checking sea surface temperatures',
-        'Reviewing frontal boundary positions',
-        'Analyzing moisture convergence zones',
+        'Pulling up weather data',
+        'Checking satellite images',
+        'Looking at radar',
+        'Reading storm alerts',
+        'Scanning for tropical activity',
+        'Checking the forecast',
+        'Looking at wind patterns',
+        'Checking for flood warnings',
+        'Reviewing the next 48 hours',
+        'Checking ocean conditions',
+        'Looking at rain chances',
+        'Reviewing weather history for this area',
+        'Checking nearby storm activity',
+        'Wrapping up weather report',
       ];
       const supplyMsgs = [
-        'Scanning fuel grid for open stations',
-        'Querying Google Places API',
-        'Checking real-time station availability',
-        'Mapping highway access routes',
-        'Evaluating flood-safe corridors',
-        'Verifying station operating hours',
-        'Comparing fuel point distances',
-        'Assessing backup supply locations',
-        'Checking road conditions near stations',
-        'Cross-referencing with evacuation routes',
+        'Searching for gas stations',
+        'Checking which stations are open',
+        'Looking at nearby options',
+        'Checking road access',
+        'Finding the closest stations',
+        'Comparing distances',
+        'Checking backup options',
+        'Looking at station hours',
+        'Mapping the best routes',
+        'Finding the best fuel option',
       ];
       const shelterMsgs = [
-        'Surveying concrete structures nearby',
-        'Querying community centers and schools',
-        'Checking building wind ratings',
-        'Evaluating structural integrity data',
-        'Mapping accessibility and parking',
-        'Cross-referencing with supply routes',
-        'Checking proximity to flood zones',
-        'Verifying building capacity estimates',
-        'Assessing backup shelter options',
-        'Reviewing Florida building code compliance',
+        'Looking for safe buildings nearby',
+        'Checking community centers',
+        'Searching schools and churches',
+        'Looking at building strength',
+        'Checking how easy they are to reach',
+        'Comparing shelter options',
+        'Checking for flood risk nearby',
+        'Looking at parking and access',
+        'Finding backup shelter options',
+        'Mapping the safest spots',
       ];
       let beatIdx = 0;
 
@@ -400,19 +400,19 @@ async function handleInitial(zip: string, directCoords?: { lat: number; lng: num
             supplyStarted = true;
             if (!reconDone) {
               reconDone = true;
-              await send({ agent: 'recon', status: 'done', feed: 'Weather assessment transmitted to team.' });
+              await send({ agent: 'recon', status: 'done', feed: 'Weather report sent to the team.' });
               await wait(500);
               await send({
                 agent: 'dispatch',
-                thinkingMessage: 'Coordinating supply + shelter search',
-                feed: 'Recon data received. Deploying Supply and Shelter agents.',
+                thinkingMessage: 'Sending out Supply and Shelter',
+                feed: 'Got the weather report. Now searching for fuel and shelter.',
               });
               await wait(400);
             }
             await send({
               agent: 'supply',
               status: 'active',
-              thinkingMessage: 'Scanning fuel grid for open stations',
+              thinkingMessage: 'Searching for gas stations',
               mapView: { lat, lng, zoom: 13 },
             });
           }
@@ -432,7 +432,7 @@ async function handleInitial(zip: string, directCoords?: { lat: number; lng: num
             await send({
               agent: 'shelter',
               status: 'active',
-              thinkingMessage: 'Surveying concrete structures nearby',
+              thinkingMessage: 'Looking for safe buildings nearby',
             });
           }
           if (content && content.length > 5 && !looksLikeJson(content)) {
@@ -458,9 +458,9 @@ async function handleInitial(zip: string, directCoords?: { lat: number; lng: num
       }
 
       if (supplyStarted) {
-        await send({ agent: 'supply', thinkingMessage: 'Finalizing supply report' });
+        await send({ agent: 'supply', thinkingMessage: 'Wrapping up fuel search' });
         await wait(1000);
-        await send({ agent: 'supply', status: 'done', feed: 'Supply sweep complete. Report filed.' });
+        await send({ agent: 'supply', status: 'done', feed: 'Found your fuel options. Report sent.' });
         await wait(600);
       } else {
         await send({ agent: 'supply', status: 'done' });
@@ -468,9 +468,9 @@ async function handleInitial(zip: string, directCoords?: { lat: number; lng: num
       }
 
       if (shelterStarted) {
-        await send({ agent: 'shelter', thinkingMessage: 'Locking in shelter recommendations' });
+        await send({ agent: 'shelter', thinkingMessage: 'Picking the best shelter options' });
         await wait(1000);
-        await send({ agent: 'shelter', status: 'done', feed: 'Shelter options mapped. Standing by.' });
+        await send({ agent: 'shelter', status: 'done', feed: 'Shelter options found and mapped.' });
         await wait(600);
       } else {
         await send({ agent: 'shelter', status: 'done' });
@@ -479,20 +479,20 @@ async function handleInitial(zip: string, directCoords?: { lat: number; lng: num
 
       await send({
         agent: 'dispatch',
-        thinkingMessage: 'All agents reported in',
-        feed: 'All field agents have checked in. Beginning synthesis.',
+        thinkingMessage: 'All agents checked in',
+        feed: 'All agents have reported back. Putting together your plan.',
       });
       await wait(1200);
 
       await send({
         agent: 'dispatch',
-        thinkingMessage: 'Correlating weather and ground intel',
+        thinkingMessage: 'Reviewing what the team found',
       });
       await wait(1000);
 
       await send({
         agent: 'dispatch',
-        thinkingMessage: 'Running threat assessment matrix',
+        thinkingMessage: 'Assessing your risk level',
       });
       await wait(800);
 
@@ -505,13 +505,13 @@ async function handleInitial(zip: string, directCoords?: { lat: number; lng: num
 
       await send({
         agent: 'dispatch',
-        thinkingMessage: 'Compiling action plan',
+        thinkingMessage: 'Building your action plan',
       });
       await wait(1000);
 
       await send({
         agent: 'dispatch',
-        thinkingMessage: 'Finalizing directives',
+        thinkingMessage: 'Finishing up',
         mapView: { lat, lng, zoom: 14 },
       });
       await wait(600);
@@ -625,14 +625,12 @@ async function handleFollowUp(storedSessionId: string, question: string) {
       let adkDone = false;
       const followUpMsgs = [
         'Thinking about your question',
-        'Reviewing previous intel',
-        'Cross-referencing agent reports',
-        'Checking what Recon found',
-        'Reviewing Supply data',
-        'Checking Shelter options',
-        'Consulting weather models',
+        'Looking back at what we found',
+        'Checking the earlier reports',
+        'Reviewing the weather info',
+        'Looking at fuel and shelter data',
         'Putting an answer together',
-        'Drafting response',
+        'Almost ready',
       ];
       let beatIdx = 0;
 

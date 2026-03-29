@@ -283,29 +283,38 @@ export default function Dashboard() {
       },
     }));
 
+    const onSuccess = (pos: GeolocationPosition) => {
+      deployWithParams({
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+      });
+    };
+
+    const onFail = () => {
+      if (!mountedRef.current) return;
+      setState({
+        ...INITIAL_STATE,
+        feedItems: [
+          {
+            time: timestamp(),
+            agent: 'dispatch',
+            color: AGENT_COLORS.dispatch,
+            message:
+              'Could not access your location. Make sure location is enabled in your browser settings, then try again — or enter a ZIP code.',
+          },
+        ],
+      });
+    };
+
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        deployWithParams({
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-        });
-      },
+      onSuccess,
       () => {
-        if (!mountedRef.current) return;
-        setState({
-          ...INITIAL_STATE,
-          feedItems: [
-            {
-              time: timestamp(),
-              agent: 'dispatch',
-              color: AGENT_COLORS.dispatch,
-              message:
-                'Could not access your location. Please enter a ZIP code instead.',
-            },
-          ],
+        navigator.geolocation.getCurrentPosition(onSuccess, onFail, {
+          enableHighAccuracy: false,
+          timeout: 10000,
         });
       },
-      { enableHighAccuracy: true, timeout: 10000 },
+      { enableHighAccuracy: true, timeout: 5000 },
     );
   }, [deployWithParams]);
 
