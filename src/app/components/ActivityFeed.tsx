@@ -1,6 +1,5 @@
 'use client';
 
-import { useRef, useEffect } from 'react';
 import type { FeedItem } from '../lib/types';
 
 interface ActivityFeedProps {
@@ -8,14 +7,8 @@ interface ActivityFeedProps {
 }
 
 export default function ActivityFeed({ items }: ActivityFeedProps) {
-  const bottomRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [items.length]);
-
   return (
-    <div className="flex-1 overflow-y-auto">
+    <>
       {items.map((item, i) => (
         <div
           key={i}
@@ -38,8 +31,6 @@ export default function ActivityFeed({ items }: ActivityFeedProps) {
           </div>
         </div>
       ))}
-      <div ref={bottomRef} />
-      <div className="h-[200px] shrink-0 pointer-events-none" aria-hidden="true" />
-    </div>
+    </>
   );
 }

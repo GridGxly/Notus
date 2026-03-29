@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import AgentRow from './AgentRow';
 import ActivityFeed from './ActivityFeed';
 import type { AgentName, NotusState } from '../lib/types';
@@ -25,6 +25,14 @@ export default function Sidebar({
 }: SidebarProps) {
   const [zipCode, setZipCode] = useState('');
   const [followUpText, setFollowUpText] = useState('');
+  const feedScrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = feedScrollRef.current;
+    if (el) {
+      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    }
+  }, [feedItems.length]);
 
   const handleGo = () => {
     const zip = zipCode.trim();
@@ -175,7 +183,7 @@ export default function Sidebar({
         />
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 pt-3 pb-4">
+      <div ref={feedScrollRef} className="flex-1 min-h-0 overflow-y-auto px-4 pt-3 pb-4">
         <ActivityFeed items={feedItems} />
       </div>
 
