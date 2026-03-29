@@ -1,3 +1,5 @@
+<div align="center">
+
 # NOTUS
 
 **Named after the Greek god of the south wind. Four AI agents coordinate in real-time to deliver personalized hurricane evacuation plans. Enter a ZIP code, get a plan.**
@@ -5,6 +7,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/GridGxly/Notus/blob/main/LICENSE)
 [![Deploy](https://img.shields.io/badge/Live-Cloud%20Run-4285F4?logo=google-cloud)](https://notus-157773981093.us-central1.run.app/)
 [![Built with](https://img.shields.io/badge/Built%20with-Google%20ADK-FF6B35)](https://google.github.io/adk-docs/)
+
+</div>
 
 ## Inspiration
 
