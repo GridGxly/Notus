@@ -54,8 +54,7 @@ export default function Sidebar({
         boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
       }}
     >
-      <div className="flex-1 min-h-0 overflow-y-auto">
-      <div className="p-5 pb-4">
+      <div className="shrink-0 p-5 pb-4">
         <div className="flex items-center">
           <Image
             src="/notus-logo-512px.png"
@@ -144,6 +143,7 @@ export default function Sidebar({
         )}
       </div>
 
+      <div className="flex-1 min-h-0 overflow-y-auto">
       <div
         className="px-4 py-3"
         style={{
