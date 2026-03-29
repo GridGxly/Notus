@@ -227,9 +227,18 @@ function extractPins(
   return Promise.all(promises);
 }
 
-async function handleInitial(zip: string) {
-  const coords = await geocodeZip(zip);
-  const { lat, lng, state: stateCode } = coords;
+async function handleInitial(zip: string, directCoords?: { lat: number; lng: number }) {
+  let lat: number, lng: number, stateCode: string;
+  if (directCoords) {
+    lat = directCoords.lat;
+    lng = directCoords.lng;
+    stateCode = 'FL';
+  } else {
+    const coords = await geocodeZip(zip);
+    lat = coords.lat;
+    lng = coords.lng;
+    stateCode = coords.state;
+  }
   const { readable, send, finish } = createStream();
 
   (async () => {
@@ -265,10 +274,11 @@ async function handleInitial(zip: string) {
 
       await send({ agent: 'dispatch', sessionId: session.id });
 
+      const locationLabel = zip === 'GPS' ? 'their current GPS location' : `zip code ${zip}`;
       const userMessage = {
         role: 'user' as const,
         parts: [{
-          text: `Analyze hurricane preparedness for coordinates ${lat}, ${lng} in state ${stateCode}. The user is at zip code ${zip}.`,
+          text: `Analyze hurricane preparedness for coordinates ${lat}, ${lng} in state ${stateCode}. The user is at ${locationLabel}.`,
         }],
       };
 
@@ -679,6 +689,10 @@ export async function POST(request: Request) {
 
   if (body.followUp && body.sessionId) {
     return handleFollowUp(body.sessionId, body.followUp);
+  }
+
+  if (typeof body.lat === 'number' && typeof body.lng === 'number') {
+    return handleInitial('GPS', { lat: body.lat, lng: body.lng });
   }
 
   return handleInitial(body.zip);

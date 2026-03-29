@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import type { ActionPlan } from '../lib/types';
 
 interface ActionBarProps {
@@ -7,26 +8,42 @@ interface ActionBarProps {
   actionPlan?: ActionPlan | null;
 }
 
-const AlertTriangle = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+const Shield = ({ color = 'currentColor' }: { color?: string }) => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+  </svg>
 );
-const Fuel = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" x2="15" y1="22" y2="22"/><line x1="4" x2="14" y1="9" y2="9"/><path d="M14 22V4a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v18"/><path d="M14 13h2a2 2 0 0 1 2 2v2a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2V9.83a2 2 0 0 0-.59-1.42L18 5"/></svg>
+const FuelPump = ({ color = 'currentColor' }: { color?: string }) => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="3" x2="15" y1="22" y2="22" />
+    <line x1="4" x2="14" y1="9" y2="9" />
+    <path d="M14 22V4a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v18" />
+    <path d="M14 13h2a2 2 0 0 1 2 2v2a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2V9.83a2 2 0 0 0-.59-1.42L18 5" />
+  </svg>
 );
-const Home = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+const Building = ({ color = 'currentColor' }: { color?: string }) => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect width="16" height="20" x="4" y="2" rx="2" ry="2" />
+    <path d="M9 22v-4h6v4" />
+    <path d="M8 6h.01" /><path d="M16 6h.01" /><path d="M12 6h.01" />
+    <path d="M12 10h.01" /><path d="M16 10h.01" /><path d="M8 10h.01" />
+    <path d="M12 14h.01" /><path d="M16 14h.01" /><path d="M8 14h.01" />
+  </svg>
 );
-const MapRoute = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 9 4.34-4.34a6 6 0 0 1 8.32 0L20 9"/><path d="m3 20 4.34-4.34a6 6 0 0 1 8.32 0L20 20"/><path d="m9 5 1.76 1.76a3 3 0 0 1 0 4.24l-3.52 3.52a3 3 0 0 0 0 4.24L9 20"/></svg>
+const Compass = ({ color = 'currentColor' }: { color?: string }) => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10" />
+    <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
+  </svg>
 );
 
 function getThreatStyle(level: string) {
   const num = parseInt(level) || 1;
-  if (num >= 5) return { color: '#ef4444', bg: 'rgba(239,68,68,0.10)', border: 'rgba(239,68,68,0.35)', label: 'CRITICAL' };
-  if (num >= 4) return { color: '#ef4444', bg: 'rgba(239,68,68,0.07)', border: 'rgba(239,68,68,0.25)', label: 'HIGH' };
-  if (num >= 3) return { color: '#f97316', bg: 'rgba(249,115,22,0.07)', border: 'rgba(249,115,22,0.25)', label: 'MODERATE' };
-  if (num >= 2) return { color: '#eab308', bg: 'rgba(234,179,8,0.07)', border: 'rgba(234,179,8,0.25)', label: 'ADVISORY' };
-  return { color: '#22c55e', bg: 'rgba(34,197,94,0.05)', border: 'rgba(34,197,94,0.20)', label: 'CLEAR' };
+  if (num >= 5) return { color: '#ef4444', label: 'CRITICAL' };
+  if (num >= 4) return { color: '#ef4444', label: 'HIGH' };
+  if (num >= 3) return { color: '#f97316', label: 'MODERATE' };
+  if (num >= 2) return { color: '#eab308', label: 'ADVISORY' };
+  return { color: '#22c55e', label: 'CLEAR' };
 }
 
 function StatusDot({ status }: { status: string }) {
@@ -37,9 +54,11 @@ function StatusDot({ status }: { status: string }) {
     <div className="flex items-center gap-1.5">
       <div
         className={`w-[5px] h-[5px] rounded-full shrink-0 ${
-          isGood ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]'
-          : isBad ? 'bg-red-400 shadow-[0_0_6px_rgba(248,113,113,0.6)]'
-          : 'bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.6)] animate-pulse'
+          isGood
+            ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]'
+            : isBad
+              ? 'bg-red-400 shadow-[0_0_6px_rgba(248,113,113,0.6)]'
+              : 'bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.6)] animate-pulse'
         }`}
       />
       <span
@@ -53,121 +72,176 @@ function StatusDot({ status }: { status: string }) {
   );
 }
 
-export default function ActionBar({ visible = false, actionPlan = null }: ActionBarProps) {
-  if (!visible) return null;
-
-  const threat = getThreatStyle(actionPlan?.threat?.level || '1/5');
-
+function Card({
+  accentColor,
+  pulse,
+  id,
+  expanded,
+  onToggle,
+  expandedContent,
+  children,
+}: {
+  accentColor: string;
+  pulse?: boolean;
+  id: string;
+  expanded: string | null;
+  onToggle: (id: string) => void;
+  expandedContent?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  const isOpen = expanded === id;
   return (
     <div
-      className="shrink-0 border-t border-white/[0.06] relative overflow-hidden"
+      className={`rounded-xl p-4 flex flex-col relative overflow-hidden cursor-pointer transition-all duration-200 ${pulse ? 'animate-red-pulse' : ''}`}
       style={{
-        animation: 'slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards',
-        background: 'linear-gradient(180deg, rgba(10,10,15,0.95) 0%, rgba(8,8,12,0.98) 100%)',
-        backdropFilter: 'blur(24px)',
+        background: 'rgba(255, 255, 255, 0.03)',
+        backdropFilter: 'blur(12px)',
+        border: '1px solid rgba(255, 255, 255, 0.06)',
+        borderTopColor: accentColor,
+        borderTopWidth: '2px',
       }}
+      onMouseEnter={() => onToggle(id)}
+      onMouseLeave={() => onToggle(id)}
     >
-      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#ff6b35]/20 to-transparent" />
-
-      <div className="max-w-[1400px] mx-auto px-4 py-4 md:px-8 md:py-5 relative z-10">
-        <div className="flex items-center gap-3 mb-5">
-          <div className="relative flex items-center justify-center w-9 h-9">
-            <div className="absolute inset-0 rounded-full bg-[#ff6b35]/[0.07] border border-[#ff6b35]/20" />
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#ff6b35] relative z-10"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-          </div>
-          <div>
-            <div className="text-[9px] uppercase font-bold tracking-[2.5px] text-white/30">Notus Protocol</div>
-            <h2 className="text-[14px] font-semibold text-white/90 -mt-0.5">Action Plan Ready</h2>
-          </div>
+      {children}
+      {isOpen && expandedContent && (
+        <div className="mt-2 pt-2 text-[12px] text-white/50 leading-relaxed" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+          {expandedContent}
         </div>
+      )}
+    </div>
+  );
+}
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 md:gap-3">
-          <div
-            className="rounded-xl p-4 flex flex-col relative overflow-hidden transition-colors duration-300"
-            style={{
-              background: threat.bg,
-              border: `1px solid ${threat.border}`,
-              boxShadow: `inset 0 1px 20px ${threat.bg}`,
-            }}
+export default function ActionBar({ visible = false, actionPlan = null }: ActionBarProps) {
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  if (!visible) return null;
+
+  const threatNum = parseInt(actionPlan?.threat?.level || '1') || 1;
+  const threat = getThreatStyle(actionPlan?.threat?.level || '1/5');
+
+  const toggle = (id: string) => setExpanded(expanded === id ? null : id);
+
+  return (
+    <div className="fixed bottom-8 left-0 md:left-[340px] right-0 z-50 flex justify-center pointer-events-none px-4">
+      <div
+        className="pointer-events-auto w-full max-w-[940px] rounded-2xl p-4"
+        style={{
+          animation: 'slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+          background: 'rgba(10, 10, 18, 0.8)',
+          backdropFilter: 'blur(24px)',
+          WebkitBackdropFilter: 'blur(24px)',
+          border: '1px solid rgba(255, 255, 255, 0.05)',
+          boxShadow: '0 -8px 32px rgba(0, 0, 0, 0.5)',
+        }}
+      >
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Card
+            id="threat"
+            accentColor="#ef4444"
+            pulse={threatNum >= 3}
+            expanded={expanded}
+            onToggle={toggle}
+            expandedContent={actionPlan?.threat?.detail}
           >
-            <div className="absolute top-0 left-0 right-0 h-[2px]" style={{ background: `linear-gradient(90deg, transparent, ${threat.color}40, transparent)` }} />
             <div className="flex items-center gap-2 mb-3">
-              <div className="p-1.5 rounded-lg" style={{ background: `${threat.color}15` }}>
-                <div style={{ color: threat.color }}><AlertTriangle /></div>
-              </div>
-              <span className="text-[9px] font-bold tracking-[1.5px] text-white/40 uppercase">Threat Level</span>
+              <Shield color="#ef4444" />
+              <span className="text-[10px] font-semibold tracking-wider text-white/40 uppercase">Threat</span>
             </div>
-            <div className="flex items-baseline gap-2 mb-2">
-              <span className="text-2xl font-bold tabular-nums" style={{ color: threat.color }}>
-                {actionPlan?.threat?.level || '--'}
-              </span>
-              <span className="text-[9px] font-bold tracking-widest" style={{ color: `${threat.color}99` }}>
+            <div className="text-[16px] font-semibold text-white/90 mb-1">
+              {actionPlan?.threat?.level || '--'}{' '}
+              <span className="text-[12px] font-semibold" style={{ color: threat.color }}>
                 {threat.label}
               </span>
             </div>
-            <p className="text-[11px] leading-[1.55] text-white/50 line-clamp-3">
-              {actionPlan?.threat?.detail || 'Awaiting threat assessment data.'}
+            <p className="text-[12px] text-white/40 leading-relaxed line-clamp-2">
+              {actionPlan?.threat?.detail || 'Awaiting assessment.'}
             </p>
-          </div>
+          </Card>
 
-          <div className="rounded-xl p-4 flex flex-col relative overflow-hidden bg-white/[0.02] border border-white/[0.06] transition-colors duration-300 hover:border-[#f59e0b]/20">
-            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[#f59e0b]/20 to-transparent" />
+          <Card
+            id="fuel"
+            accentColor="#f59e0b"
+            expanded={expanded}
+            onToggle={toggle}
+            expandedContent={
+              actionPlan?.fuel ? (
+                <>
+                  <div className="font-semibold text-white/70 mb-1">{actionPlan.fuel.name}</div>
+                  {actionPlan.fuel.distance !== '--' && <div>Distance: {actionPlan.fuel.distance}</div>}
+                  <div>Status: {actionPlan.fuel.status || 'Unknown'}</div>
+                </>
+              ) : undefined
+            }
+          >
             <div className="flex items-center gap-2 mb-3">
-              <div className="p-1.5 rounded-lg bg-[#f59e0b]/[0.08]">
-                <div className="text-[#f59e0b]"><Fuel /></div>
-              </div>
-              <span className="text-[9px] font-bold tracking-[1.5px] text-white/40 uppercase">Nearest Fuel</span>
+              <FuelPump color="#f59e0b" />
+              <span className="text-[10px] font-semibold tracking-wider text-white/40 uppercase">Fuel</span>
             </div>
-            <div className="text-[13px] font-semibold text-white/85 mb-2 leading-snug">
+            <div className="text-[16px] font-semibold text-white/90 mb-1 leading-snug">
               {actionPlan?.fuel?.name || 'Searching...'}
             </div>
             <div className="mt-auto flex items-center justify-between">
               <StatusDot status={actionPlan?.fuel?.status || ''} />
               {actionPlan?.fuel?.distance && actionPlan.fuel.distance !== '--' && (
-                <span className="text-[10px] text-white/25 font-mono">{actionPlan.fuel.distance}</span>
+                <span className="text-[11px] text-white/25 font-mono">
+                  {actionPlan.fuel.distance}
+                </span>
               )}
             </div>
-          </div>
+          </Card>
 
-          <div className="rounded-xl p-4 flex flex-col relative overflow-hidden bg-white/[0.02] border border-white/[0.06] transition-colors duration-300 hover:border-[#8b5cf6]/20">
-            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[#8b5cf6]/20 to-transparent" />
+          <Card
+            id="shelter"
+            accentColor="#8b5cf6"
+            expanded={expanded}
+            onToggle={toggle}
+            expandedContent={
+              actionPlan?.shelter ? (
+                <>
+                  <div className="font-semibold text-white/70 mb-1">{actionPlan.shelter.name}</div>
+                  {actionPlan.shelter.distance !== '--' && <div>Distance: {actionPlan.shelter.distance}</div>}
+                  <div>Status: {actionPlan.shelter.status || 'Unknown'}</div>
+                </>
+              ) : undefined
+            }
+          >
             <div className="flex items-center gap-2 mb-3">
-              <div className="p-1.5 rounded-lg bg-[#8b5cf6]/[0.08]">
-                <div className="text-[#8b5cf6]"><Home /></div>
-              </div>
-              <span className="text-[9px] font-bold tracking-[1.5px] text-white/40 uppercase">Secure Shelter</span>
+              <Building color="#8b5cf6" />
+              <span className="text-[10px] font-semibold tracking-wider text-white/40 uppercase">Shelter</span>
             </div>
-            <div className="text-[13px] font-semibold text-white/85 mb-2 leading-snug">
+            <div className="text-[16px] font-semibold text-white/90 mb-1 leading-snug">
               {actionPlan?.shelter?.name || 'Searching...'}
             </div>
             <div className="mt-auto flex items-center justify-between">
               <StatusDot status={actionPlan?.shelter?.status || ''} />
               {actionPlan?.shelter?.distance && actionPlan.shelter.distance !== '--' && (
-                <span className="text-[10px] text-white/25 font-mono">{actionPlan.shelter.distance}</span>
+                <span className="text-[11px] text-white/25 font-mono">
+                  {actionPlan.shelter.distance}
+                </span>
               )}
             </div>
-          </div>
+          </Card>
 
-          <div className="rounded-xl p-4 flex flex-col relative overflow-hidden border border-white/[0.06] transition-colors duration-300 hover:border-[#3b82f6]/20"
-            style={{ background: 'linear-gradient(135deg, rgba(59,130,246,0.04) 0%, rgba(59,130,246,0.01) 100%)' }}
+          <Card
+            id="directive"
+            accentColor="#22c55e"
+            expanded={expanded}
+            onToggle={toggle}
+            expandedContent={actionPlan?.directive?.secondary}
           >
-            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[#3b82f6]/20 to-transparent" />
             <div className="flex items-center gap-2 mb-3">
-              <div className="p-1.5 rounded-lg bg-[#3b82f6]/[0.08]">
-                <div className="text-[#3b82f6]"><MapRoute /></div>
-              </div>
-              <span className="text-[9px] font-bold tracking-[1.5px] text-white/40 uppercase">Directive</span>
+              <Compass color="#22c55e" />
+              <span className="text-[10px] font-semibold tracking-wider text-white/40 uppercase">Directive</span>
             </div>
-            <div className="text-[13px] font-semibold text-white/85 mb-2 leading-snug">
+            <div className="text-[16px] font-semibold text-white/90 mb-1 leading-snug">
               {actionPlan?.directive?.primary || 'Awaiting directive...'}
             </div>
-            <div className="mt-auto pt-2 border-t border-white/[0.04]">
-              <p className="text-[10px] text-white/35 leading-relaxed">
-                {actionPlan?.directive?.secondary || '--'}
-              </p>
-            </div>
-          </div>
-
+            <p className="text-[12px] text-white/40 leading-relaxed">
+              {actionPlan?.directive?.secondary || '--'}
+            </p>
+          </Card>
         </div>
       </div>
     </div>

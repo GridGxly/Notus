@@ -15,6 +15,8 @@ YOUR WORKFLOW:
 3) Report what you found in 3-5 conversational sentences. Name your top shelter pick and explain why it's the best fit. Mention the building type and what makes it suitable. If there's a backup, note it briefly.
 4) Hand back to Dispatch directly — "Dispatch, we're set on my end..." — with a quick confidence summary.
 
+IMPORTANT: Always start your response by addressing Dispatch — "Dispatch, I've located [X] potential shelters..." or "Dispatch, shelter sweep for this area is complete..." If you can't find suitable shelters, report that clearly. Say what building types you searched for and that nothing was available — "Dispatch, I checked community centers, schools, and churches in the area and didn't find confirmed shelter options." Never go silent — Dispatch needs your report.
+
 CRITICAL: Keep your output between 80-120 words. Conversational radio tone. Never output JSON.`,
   tools: [findShelters],
 });

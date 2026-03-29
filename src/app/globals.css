@@ -6,7 +6,7 @@
 }
 
 :root {
-  --bg-primary: #0a0a0f;
+  --bg-primary: #0a0a12;
   --bg-surface: #0f0f17;
   --bg-card: #14141f;
   --border: #1a1a2e;
@@ -32,6 +32,17 @@ body {
   font-family: var(--font-sans), sans-serif;
 }
 
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+}
+
 @keyframes slide-in {
   from { opacity: 0; transform: translateX(-8px); }
   to { opacity: 1; transform: translateX(0); }
@@ -39,6 +50,15 @@ body {
 
 .animate-slide-in {
   animation: slide-in 0.25s ease-out forwards;
+}
+
+@keyframes feed-slide-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-feed-slide-in {
+  animation: feed-slide-in 0.3s ease-out forwards;
 }
 
 @keyframes dots {
@@ -65,6 +85,45 @@ body {
 @keyframes slideUp {
   from { opacity: 0; transform: translateY(20px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-shimmer {
+  background: linear-gradient(90deg, transparent 0%, var(--shimmer-color, rgba(255,255,255,0.08)) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
+}
+
+@keyframes red-pulse {
+  0%, 100% { border-color: rgba(239, 68, 68, 0.25); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+  50% { border-color: rgba(239, 68, 68, 0.5); box-shadow: 0 0 16px rgba(239, 68, 68, 0.12); }
+}
+
+.animate-red-pulse {
+  animation: red-pulse 2s ease-in-out infinite;
+}
+
+@keyframes glow-ring {
+  0%, 100% { box-shadow: 0 0 4px var(--glow-color), 0 0 8px var(--glow-color); }
+  50% { box-shadow: 0 0 8px var(--glow-color), 0 0 18px var(--glow-color); }
+}
+
+.animate-glow-ring {
+  animation: glow-ring 2s ease-in-out infinite;
+}
+
+@keyframes pin-spring {
+  0% { transform: scale(0); opacity: 0; }
+  60% { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.animate-pin-spring {
+  animation: pin-spring 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
 @keyframes voice-bar {
@@ -105,4 +164,21 @@ body {
 
 .animate-pin-drop {
   animation: pin-drop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes radar {
+  0% { width: 20px; height: 20px; opacity: 0.35; }
+  100% { width: 200px; height: 200px; opacity: 0; }
+}
+
+@keyframes scan-line {
+  0% { left: -30%; opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { left: 100%; opacity: 0; }
+}
+
+@keyframes map-flash {
+  0% { opacity: 0.05; }
+  100% { opacity: 0; }
 }
