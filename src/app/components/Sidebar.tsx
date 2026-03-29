@@ -143,9 +143,8 @@ export default function Sidebar({
         )}
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto">
       <div
-        className="px-4 py-3"
+        className="shrink-0 px-4 py-3"
         style={{
           borderTop: '1px solid rgba(255, 255, 255, 0.05)',
           borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
@@ -176,9 +175,8 @@ export default function Sidebar({
         />
       </div>
 
-      <div className="px-4 pt-3 pb-4">
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 pt-3 pb-4">
         <ActivityFeed items={feedItems} />
-      </div>
       </div>
 
       {showFollowUp && !anyActive && (

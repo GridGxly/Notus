@@ -269,8 +269,6 @@ export default function Dashboard() {
   );
 
   const handleGeolocate = useCallback(() => {
-    if (!navigator.geolocation) return;
-
     setState((prev) => ({
       ...prev,
       agents: {
@@ -290,28 +288,43 @@ export default function Dashboard() {
       });
     };
 
-    const onFail = () => {
-      if (!mountedRef.current) return;
-      setState({
-        ...INITIAL_STATE,
-        feedItems: [
-          {
-            time: timestamp(),
-            agent: 'dispatch',
-            color: AGENT_COLORS.dispatch,
-            message:
-              'Could not access your location. Make sure location is enabled in your browser settings, then try again — or enter a ZIP code.',
-          },
-        ],
-      });
+    const ipFallback = async () => {
+      try {
+        const res = await fetch('https://ipapi.co/json/');
+        if (!res.ok) throw new Error('IP lookup failed');
+        const data = await res.json();
+        if (data.latitude && data.longitude) {
+          deployWithParams({ lat: data.latitude, lng: data.longitude });
+          return;
+        }
+        throw new Error('No coordinates');
+      } catch {
+        if (!mountedRef.current) return;
+        setState({
+          ...INITIAL_STATE,
+          feedItems: [
+            {
+              time: timestamp(),
+              agent: 'dispatch',
+              color: AGENT_COLORS.dispatch,
+              message: 'Could not determine your location. Please enter a ZIP code instead.',
+            },
+          ],
+        });
+      }
     };
+
+    if (!navigator.geolocation) {
+      ipFallback();
+      return;
+    }
 
     navigator.geolocation.getCurrentPosition(
       onSuccess,
       () => {
-        navigator.geolocation.getCurrentPosition(onSuccess, onFail, {
+        navigator.geolocation.getCurrentPosition(onSuccess, () => ipFallback(), {
           enableHighAccuracy: false,
-          timeout: 10000,
+          timeout: 8000,
         });
       },
       { enableHighAccuracy: true, timeout: 5000 },
