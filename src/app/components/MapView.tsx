@@ -265,7 +265,7 @@ export default function MapView({
             ))}
             <div className="w-2 h-2 rounded-full bg-[#ff6b35]/30" />
           </div>
-          <div className="text-[14px] text-white/40 mt-4 font-medium tracking-wide drop-shadow-[0_0_8px_rgba(0,0,0,0.8)]">
+          <div className="text-[16px] text-white/70 mt-4 font-semibold tracking-wide drop-shadow-[0_0_12px_rgba(0,0,0,1)]">
             Enter a Florida ZIP code to deploy agents
           </div>
         </div>
