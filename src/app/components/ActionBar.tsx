@@ -6,6 +6,7 @@ import type { ActionPlan } from '../lib/types';
 interface ActionBarProps {
   visible?: boolean;
   actionPlan?: ActionPlan | null;
+  mobileMapActive?: boolean;
 }
 
 const Shield = ({ color = 'currentColor' }: { color?: string }) => (
@@ -113,7 +114,7 @@ function Card({
   );
 }
 
-export default function ActionBar({ visible = false, actionPlan = null }: ActionBarProps) {
+export default function ActionBar({ visible = false, actionPlan = null, mobileMapActive = false }: ActionBarProps) {
   const [expanded, setExpanded] = useState<string | null>(null);
 
   if (!visible) return null;
@@ -124,7 +125,7 @@ export default function ActionBar({ visible = false, actionPlan = null }: Action
   const toggle = (id: string) => setExpanded(expanded === id ? null : id);
 
   return (
-    <div className="fixed bottom-8 left-0 md:left-[340px] right-0 z-50 flex justify-center pointer-events-none px-4">
+    <div className={`fixed bottom-8 left-0 md:left-[340px] right-0 z-50 flex justify-center pointer-events-none px-4 ${mobileMapActive ? '' : 'hidden md:flex'}`}>
       <div
         className="pointer-events-auto w-full max-w-[940px] rounded-2xl p-4"
         style={{

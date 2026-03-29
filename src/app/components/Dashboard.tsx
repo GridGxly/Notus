@@ -521,6 +521,7 @@ export default function Dashboard() {
       <ActionBar
         actionPlan={state.actionPlan}
         visible={state.agents.dispatch.status === 'done'}
+        mobileMapActive={mobileView === 'map'}
       />
     </div>
   );
