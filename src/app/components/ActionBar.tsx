@@ -125,7 +125,10 @@ export default function ActionBar({ visible = false, actionPlan = null, mobileMa
   const toggle = (id: string) => setExpanded(expanded === id ? null : id);
 
   return (
-    <div className={`fixed bottom-8 left-[348px] right-0 z-30 justify-center pointer-events-none px-4 ${mobileMapActive ? 'flex left-0' : 'hidden lg:flex'}`}>
+    <div
+      className={`fixed bottom-8 right-0 z-30 justify-center pointer-events-none px-4 ${mobileMapActive ? 'flex' : 'hidden lg:flex'}`}
+      style={{ left: mobileMapActive ? 0 : 348 }}
+    >
       <div
         className="pointer-events-auto w-full max-w-[600px] rounded-2xl p-3"
         style={{
